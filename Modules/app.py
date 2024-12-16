@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 
 import preprocessor.extractor
 import Telerecon.channelscraper
+import crawler
 
 app = Flask(__name__)
 
@@ -39,6 +40,20 @@ def scrape():
         return jsonify(content), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/crawl/google', methods=["GET"])
+def crawl():
+    data = request.args
+    if not data or 'query' not in data:
+        return jsonify({"error": "Please provide 'query' in the request arguments."}), 400
+
+    try:
+        result = crawler.main(data['query'])
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
