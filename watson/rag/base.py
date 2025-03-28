@@ -17,6 +17,7 @@ from .local_vectorstore import __file__ as vectorstore_path
 if typing.TYPE_CHECKING:
     from watson.watson import Watson
 
+from os.path import join, dirname, abspath
 
 class BaseWatson:
     _instances: dict[int, Union['BaseWatson', 'Watson']] = {}
@@ -26,7 +27,7 @@ class BaseWatson:
     GLOBAL: str = "global"
     MULTI: str = "multi"
     LOCAL: str = "local"
-    SQLITE_CONNECTION_STRING: str = f"chats.db"
+    SQLITE_CONNECTION_STRING: str = join(dirname(abspath(__file__)), f"chats.db")
 
     def __new__(cls, bot_id: int = None, channel_ids: list = None, scope: str = None):
         """
