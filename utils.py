@@ -16,17 +16,25 @@ def merge_lists_remove_duplicates(lists):
     return result
 
 import typing
-from typing import get_origin, get_args
+from typing import get_origin, get_args, Any, Union, Literal
 
 def is_valid_type(value, expected_type):
     origin = get_origin(expected_type)
     args = get_args(expected_type)
 
-    if origin is list:
+    if origin is Union:
+        # Union 타입 처리: 여러 타입 중 하나라도 만족하면 True
+        return any(is_valid_type(value, arg) for arg in args)
+
+    elif origin is Literal:
+        # Literal 타입: 고정된 값 중 하나여야 함
+        return value in args
+
+    elif origin is list:
         if not isinstance(value, list):
             return False
         if args:  # e.g. list[str]
-            return all(isinstance(item, args[0]) for item in value)
+            return all(is_valid_type(item, args[0]) for item in value)
         return True
 
     elif origin is dict:
@@ -34,7 +42,7 @@ def is_valid_type(value, expected_type):
             return False
         if args:  # e.g. dict[str, int]
             key_type, value_type = args
-            return all(isinstance(k, key_type) and isinstance(v, value_type)
+            return all(is_valid_type(k, key_type) and is_valid_type(v, value_type)
                        for k, v in value.items())
         return True
 
@@ -42,7 +50,7 @@ def is_valid_type(value, expected_type):
         if not isinstance(value, tuple):
             return False
         if args:
-            return all(isinstance(v, t) for v, t in zip(value, args))
+            return all(is_valid_type(v, t) for v, t in zip(value, args))
         return True
 
     elif isinstance(expected_type, type):
@@ -50,24 +58,19 @@ def is_valid_type(value, expected_type):
 
     return False
 
-def confirm_request(data,
-                    required: dict[str, typing.Union[typing.Type, tuple[typing.Type, list]]]):
+def confirm_request(data: dict, required: dict[str, Any]):
     if not data:
         return jsonify({"error": "Please provide JSON request body."}), 400
-    for key, value in required.items():
-        if type(value) is tuple and len(value) == 2:
-            value_type = value[0]
-            available_value = value[1]
-        else:
-            value_type = value
-            available_value = None
+
+    for key, expected_type in required.items():
         if key not in data:
             return jsonify({"error": f"Please provide '{key}' field in the JSON request body."}), 400
-        if not is_valid_type(data[key], value_type):
-            return jsonify({"error": f"Field '{key}' has invalid datatype. Expected {value_type}, got {type(data[key])}"}), 400
-        if available_value and data[key] not in available_value:
-            return jsonify({"error": f"Field '{key}' has invalid value. "
-                                     f"Expected in {available_value}, got {data[key]}"}), 400
+        if not is_valid_type(data[key], expected_type):
+            return jsonify({
+                "error": f"Field '{key}' has invalid datatype or value. "
+                         f"Expected {expected_type}, got {data[key]!r} ({type(data[key]).__name__})"
+            }), 400
+
     return None
 
 import uuid
