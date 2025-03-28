@@ -27,7 +27,7 @@ class BaseWatson:
     GLOBAL: str = "global"
     MULTI: str = "multi"
     LOCAL: str = "local"
-    SQLITE_CONNECTION_STRING: str = join(dirname(abspath(__file__)), f"chats.db")
+    SQLITE_CONNECTION_STRING: str = join(dirname(abspath(__file__)), f"chats.db")  # base.py와 같은 경로에 SQLITE memory file 생성
 
     def __new__(cls, bot_id: int = None, channel_ids: list = None, scope: str = None):
         """
