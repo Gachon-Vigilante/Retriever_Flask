@@ -1,6 +1,5 @@
 from pymongo import MongoClient
 import torch
-from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 from transformers import AutoTokenizer, AutoModel
 from bs4 import BeautifulSoup
