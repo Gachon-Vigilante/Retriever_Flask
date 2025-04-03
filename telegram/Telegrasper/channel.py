@@ -7,13 +7,14 @@ from server.db import DB, get_mongo_collection
 from server.logger import logger
 from .channelscraper import ChannelContentMethods
 from .monitor import ChannelContentMonitorMethods
+
 if typing.TYPE_CHECKING:
     from .manager import TelegramManager
 
 class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
     def get_channel_info(self:'TelegramManager',
                          channel_key:typing.Union[int, str],
-                         status: typing.Literal["active", "inactive"]) -> dict:
+                         ) -> dict:
         # MongoDB client 생성
         collection_name = DB.COLLECTION.CHANNEL.INFO
         collection = get_mongo_collection(DB.NAME, collection_name)  # 컬렉션 선택
@@ -27,12 +28,14 @@ class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
             "startedAt": entity.date, # 채널이 생성된 일시 (datetime.datetime)
             "discoveredAt": datetime.datetime.now(), # 채널이 처음으로 발견된 일시
             "updatedAt": datetime.datetime.now(), # 채널의 업데이트를 마지막으로 확인한 일시
-            "status": status,
+            "status": "active" if self.check(channel_key) else "inactive",
         }
         try:
             collection.insert_one(channel_info.copy())  # 데이터 삽입. copy()를 하지 않으면 mongoClient가 channel_info 원본 딕셔너리에 ObjectId를 삽입함.
         except DuplicateKeyError:
             logger.warning(f"Tried to archive a channel which is already archived. Channel ID: {entity.id}, title: {entity.title}")
+            # collection.update_one({"_id": entity.id},
+            #                       channel_info.copy()) # <- 아카이브 정책을 어떻게 할지 고민해 봐야 함.
         except Exception as exception:
             logger.error(f"Error occurred while inserting data into MongoDB: {exception}")
         else:

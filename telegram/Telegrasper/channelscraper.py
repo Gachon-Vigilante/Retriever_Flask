@@ -5,7 +5,7 @@ import os
 
 from pymongo import MongoClient
 
-from preprocess.extractor import dictionary
+from preprocess.extractor import argot_dictionary
 from server.db import get_mongo_client, DB
 from server.logger import logger
 from server.google import *
@@ -18,10 +18,11 @@ if typing.TYPE_CHECKING:
     from .manager import TelegramManager
 
 class ChannelContentMethods:
-    async def check_channel_content(self:'TelegramManager', invite_link:typing.Union[int, str]) -> bool:
+    async def check_channel_content(self:'TelegramManager', channel_key:typing.Union[int, str]) -> bool:
+        """채널의 데이터를 일부 수집해서, 마약 관련 채널로 강력히 의심되는지 확인하는 검문 메서드."""
         try:
-            logger.debug(f"Connecting to channel: {invite_link}")
-            entity = await self.accept_invitation(invite_link)
+            logger.debug(f"Connecting to channel: {channel_key}")
+            entity = await self.connect_channel(channel_key)
             if entity is None:
                 logger.warning("Failed to connect to the channel.")
                 return False
@@ -32,9 +33,11 @@ class ChannelContentMethods:
             async for post in self.client.iter_messages(entity):
                 post_count += 1
                 if post.text:
-                    suspicious_count += sum([len(re.findall(re.escape(keyword), post.text)) for keyword in dictionary])
+                    # 메세지에서 은어가 총 3개 이상 발견되면 활성 채널로 분류
+                    suspicious_count += sum([len(re.findall(re.escape(keyword), post.text)) for keyword in argot_dictionary])
                     if suspicious_count >= 3:
                         return True
+                    # 100개 이내의 채팅에 은어가 3개 이상 없을 경우 탐색을 종료하고 비활성 채널로 분류
                     if post_count > 100:
                         return False
 
