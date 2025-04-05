@@ -2,7 +2,7 @@ from pymongo import MongoClient
 import torch
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import BertTokenizer, BertModel
+from transformers import AutoTokenizer, AutoModel
 from bs4 import BeautifulSoup
 
 # MongoDB 연결 설정
@@ -12,8 +12,8 @@ collection = db['test']  # 기존 데이터가 저장된 컬렉션 이름
 
 # KoBERT 모델과 토크나이저 불러오기
 model_name = "monologg/kobert"
-tokenizer = BertTokenizer.from_pretrained(model_name)
-model = BertModel.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
 
 # HTML 문서 전처리 함수
 def preprocess_html(html_content):
