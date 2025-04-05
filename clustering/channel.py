@@ -1,106 +1,91 @@
 from pymongo import MongoClient
 import torch
+import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from transformers import AutoTokenizer, AutoModel
-import numpy as np
 
-# MongoDB 연결 설정
-client = MongoClient("mongodb://localhost:27017/")
-db = client['local']
-collection = db['train']
-similarity_collection = db['channel_similarity']  # 유사도 결과 저장 컬렉션
+# MongoDB 연결
+client = MongoClient("mongodb://admin:sherlocked@34.64.57.207:27017/")
+db = client['retriever-woohyuk']
+collection = db['channel_data']
+similarity_collection = db['channel_similarity']
+drug_collection = db['drugs']
 
-# KoBERT 모델 및 토크나이저 로드
+# KoBERT 모델 로딩
 model_name = "monologg/kobert"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModel.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
 
-drug_keywords = {
-    '코카인': 3.0,
-    '메스암페타민': 3.0,
-    '펜타닐': 3.0,
-    'LSD': 3.0,
-    '엑스터시': 3.0,
-    '순도': 2.0
-}
+# 마약 가중치 로딩
+def load_drug_weights():
+    drugs = drug_collection.find({})
+    weights = {}
+    for drug in drugs:
+        name = drug.get('drugName')
+        count = drug.get('count', 1)
+        if name:
+            weights[name] = count
+    return weights
 
-# HTML 문서 불러오기
-def fetch_html_documents():
-    documents = collection.find({}, {"_id": 1, "channelId": 1, "timestamp": 1, "text": 1, "sender": 1, "views": 1, "url": 1, "id": 1, "media": 1, "argot": 1, "drugs": 1})
-    return [{
-        "_id": doc["_id"],
-        "channelId": doc["channelId"],
-        "timestamp": doc["timestamp"],
-        "text": doc.get("text", ""),
-        "sender": doc.get("sender", {}),
-        "views": doc.get("views", 0),
-        "url": doc.get("url", ""),
-        "id": doc.get("id", 0),
-        "media": doc.get("media", {}),
-        "argot": doc.get("argot", []),
-        "drugs": doc.get("drugs", [])
-    } for doc in documents]
-
-# 텍스트 전처리
-def preprocess_text(text):
-    return ' '.join(text.split()).strip()
-
-# 가중치 적용 텍스트 전처리 (단어 가중치 적용)
-def apply_keyword_weight(text):
+# 텍스트 가중치 적용
+def apply_weighted_keywords(text, weights):
     words = text.split()
     weighted_words = []
     for word in words:
-        weight = drug_keywords.get(word, 1.0)
-        weighted_words.extend([word] * int(weight))  # 최적화된 방식
+        weight = int(weights.get(word, 1))
+        weighted_words.extend([word] * weight)
     return ' '.join(weighted_words)
 
-# KoBERT 임베딩 생성
+# KoBERT 임베딩
 def get_bert_embedding(text):
     tokens = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding="max_length")
     with torch.no_grad():
         output = model(**tokens)
     return output.last_hidden_state[:, 0, :].squeeze().tolist()
 
-# 유사도 분석 및 저장
-def calculate_and_store_similarity():
-    documents = fetch_html_documents()
+# 채널별 메시지 통합
+def group_texts_by_channel():
+    cursor = collection.find({}, {"channelId": 1, "text": 1, "timestamp": 1})
+    grouped = {}
+    timestamps = {}
 
-    # 가중치 적용된 텍스트로 임베딩 생성
-    weighted_embeddings = [get_bert_embedding(apply_keyword_weight(preprocess_text(doc["text"]))) for doc in documents]
+    for doc in cursor:
+        channel = doc["channelId"]
+        text = doc.get("text", "")
+        if not text.strip():
+            continue
+        grouped[channel] = grouped.get(channel, "") + " " + text
+        timestamps[channel] = doc["timestamp"]  # 가장 마지막 메시지 기준으로 덮어씀
 
-    similarity_matrix = cosine_similarity(np.array(weighted_embeddings))
+    return grouped, timestamps
 
-    similarity_collection.delete_many({})  # 기존 데이터 초기화
+# 채널 유사도 분석 및 저장
+def calculate_and_store_channel_similarity():
+    drug_weights = load_drug_weights()
+    grouped_texts, timestamps = group_texts_by_channel()
 
-    similarity_data = []
+    channel_ids = list(grouped_texts.keys())
+    texts = [apply_weighted_keywords(grouped_texts[cid], drug_weights) for cid in channel_ids]
+    embeddings = [get_bert_embedding(text) for text in texts]
 
-    for idx, doc in enumerate(documents):
-        similarities = []
-        for jdx, score in enumerate(similarity_matrix[idx]):
-            if idx != jdx:
-                similarities.append({
-                    "similarPost": documents[jdx]["channelId"],
+    similarity_matrix = cosine_similarity(np.array(embeddings))
+    similarity_collection.delete_many({})  # 기존 데이터 삭제
+
+    results = []
+    for i, cid in enumerate(channel_ids):
+        similar_channels = []
+        for j, score in enumerate(similarity_matrix[i]):
+            if i != j:
+                similar_channels.append({
+                    "channelId": channel_ids[j],
                     "similarity": float(score)
                 })
 
-        similarity_data.append({
-            "_id": doc["_id"],
-            "channelId": doc["channelId"],
-            "timestamp": doc["timestamp"],
-            "text": doc["text"],
-            "sender": doc["sender"],
-            "views": doc["views"],
-            "url": doc["url"],
-            "id": doc["id"],
-            "media": doc["media"],
-            "argot": doc["argot"],
-            "drugs": doc["drugs"],
-            "similarChannels": similarities
+        results.append({
+            "channelId": cid,
+            "timestamp": timestamps[cid],
+            "similarChannels": sorted(similar_channels, key=lambda x: -x["similarity"])[:10]
         })
 
-    # 최적화된 MongoDB 삽입
-    for doc in similarity_data:
-        doc.pop("_id", None)  # 기존 _id 제거
-    similarity_collection.insert_many(similarity_data)
-
-    return {"message": "Channel similarity calculations stored successfully in MongoDB."}
+    similarity_collection.insert_many(results)
+    return {"message": "Channel similarity with drug weights saved to MongoDB."}
