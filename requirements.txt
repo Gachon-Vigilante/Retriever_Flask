@@ -51,3 +51,6 @@ IPython
 torch
 scikit-learn
 python-louvain
+
+# kobert용 패키지
+sentencepiece
