@@ -1,76 +1,104 @@
 from pymongo import MongoClient
 import torch
+import numpy as np
+import re
+from urllib.parse import urlparse
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 from transformers import AutoTokenizer, AutoModel
 from bs4 import BeautifulSoup
-import numpy as np
+from tqdm import tqdm
 
-# MongoDB 연결 설정
-client = MongoClient("mongodb://localhost:27017/")
-db = client['local']
-collection = db['train']
-cluster_collection = db['post_clusters']  # 클러스터링 결과 저장 컬렉션
+# MongoDB 연결
+client = MongoClient("mongodb://admin:sherlocked@34.64.57.207:27017/")
+db = client['retriever-woohyuk']
+collection = db['posts']
+cluster_collection = db['post_clusters']
 
-# KoBERT 모델 및 토크나이저 로드
+# KoBERT 모델 불러오기
 model_name = "monologg/kobert"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModel.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
 
-# HTML 문서 불러오기
-def fetch_html_documents():
-    documents = collection.find({}, {"_id": 1, "postId": 1, "html": 1, "createdAt": 1, "updatedAt": 1})
-    return [{
-        "_id": str(doc["_id"]),
-        "postId": doc["postId"],
-        "html": doc["html"],
-        "createdAt": doc["createdAt"],
-        "updatedAt": doc["updatedAt"]
-    } for doc in documents if "html" in doc]
-
-# HTML 전처리
+# HTML 정제 함수
 def preprocess_html(html_content):
     soup = BeautifulSoup(html_content, 'html.parser')
     return soup.get_text(separator=' ').strip()
 
-# KoBERT 임베딩 생성
+# KoBERT 임베딩 추출
 def get_bert_embedding(text):
     tokens = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding="max_length")
     with torch.no_grad():
         output = model(**tokens)
     return output.last_hidden_state[:, 0, :].squeeze().tolist()
 
-# DBSCAN 클러스터링
-def dbscan_clustering(similarity_matrix, eps=0.4, min_samples=2):
-    distance_matrix = 1 - similarity_matrix  # 코사인 유사도를 거리로 변환
+# 도메인 추출
+def extract_domain(url):
+    try:
+        return urlparse(url).netloc
+    except:
+        return None
+
+# 텔레그램 채널 ID 추출
+def extract_channel_id(url):
+    match = re.search(r'(t\.me|telegram\.me)/([a-zA-Z0-9_]+)', url)
+    if match:
+        return match.group(2)
+    return None
+
+# 클러스터링 수행
+def dbscan_clustering(embeddings, eps=0.4, min_samples=2):
+    similarity_matrix = cosine_similarity(np.array(embeddings))
+    similarity_matrix = (similarity_matrix + 1) / 2  # 정규화: [-1, 1] → [0, 1]
+
+    distance_matrix = 1 - similarity_matrix
+    distance_matrix = np.clip(distance_matrix, 0, 1)  # 음수 방지
+
     db = DBSCAN(metric="precomputed", eps=eps, min_samples=min_samples)
     return db.fit_predict(distance_matrix)
 
-# 클러스터링 실행 및 MongoDB 저장
+# 전체 클러스터링 프로세스
 def perform_clustering_with_cosine(eps=0.4, min_samples=2):
-    documents = fetch_html_documents()
-    embeddings = [get_bert_embedding(preprocess_html(doc["html"])) for doc in documents]
+    # 데이터 불러오기
+    documents = list(collection.find({}, {
+        "_id": 1, "postId": 1, "html": 1, "createdAt": 1, "updatedAt": 1, "promoSiteLink": 1
+    }))
 
-    similarity_matrix = cosine_similarity(np.array(embeddings))
-    labels = dbscan_clustering(similarity_matrix, eps, min_samples)
+    if not documents:
+        return {"error": "No documents found."}
 
-    # 클러스터링 결과를 MongoDB에 저장
-    cluster_collection.delete_many({})  # 기존 데이터 초기화
+    # 임베딩 생성
+    embeddings = []
+    for doc in tqdm(documents, desc="Generating embeddings"):
+        text = preprocess_html(doc.get("html", ""))
+        embeddings.append(get_bert_embedding(text))
 
+    # 클러스터링
+    labels = dbscan_clustering(embeddings, eps, min_samples)
+
+    # 이전 클러스터 데이터 삭제
+    cluster_collection.delete_many({})
+
+    # 클러스터 저장
     for idx, doc in enumerate(documents):
-        cluster_collection.insert_one({
-            "postId": doc["postId"],
+        promo_link = doc.get("promoSiteLink")
+        cluster_data = {
+            "postId": doc.get("postId"),
             "cluster_label": int(labels[idx]),
             "embedding": embeddings[idx],
-            "createdAt": doc["createdAt"],
-            "updatedAt": doc["updatedAt"]
-        })
+            "promoSiteLink": promo_link,
+            "promoSiteName": extract_domain(promo_link) if promo_link else None,
+            "channelId": extract_channel_id(promo_link) if promo_link else None,
+            "createdAt": doc.get("createdAt"),
+            "updatedAt": doc.get("updatedAt")
+        }
+        cluster_collection.insert_one(cluster_data)
 
-    # 클러스터 통계 정보 저장
+    # 통계 저장
     cluster_collection.insert_one({
         "_id": "cluster_stats",
         "total_documents": len(documents),
         "noise_documents": list(labels).count(-1)
     })
 
-    return {"message": "Clustering results stored successfully in MongoDB."}
+    return {"message": "Clustering + promo info 저장 완료!"}
