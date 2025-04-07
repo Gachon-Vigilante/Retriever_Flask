@@ -7,7 +7,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, BaseMessage
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import create_retriever_tool
+from langchain_core.tools import create_retriever_tool, Tool
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI
 from langchain_teddynote.models import get_model_name, LLMs
@@ -303,7 +303,7 @@ class LangGraphMethods:
 
     # 데이터 기반 질문에 대응하는 Graph Branch
     @staticmethod
-    def execute_retriever(state:GraphState, retriever_tool:VectorStoreRetriever) -> GraphState:
+    def execute_retriever(state:GraphState, retriever_tool:Tool) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: execute retriever ===\n")
         # rewrite_question에서 넘어온 경우에 원래 질문에서 바뀐 다른 새로운 질문을 입력해야 하므로, 현재 상태에서 마지막 메시지(질문) 추출.

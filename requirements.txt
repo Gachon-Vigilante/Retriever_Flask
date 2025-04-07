@@ -3,6 +3,7 @@
 # 범용 패키지
 datetime
 python-dotenv
+numpy
 
 # 웹 크롤링 기능에 필요한 패키지
 selenium
@@ -22,20 +23,20 @@ telethon
 beautifulsoup4
 
 # Telerecon 라이브러리 사용에 필요한 패키지(사용되지 않음)
-pandas
-reportlab
-matplotlib
-pytz
-tzlocal
-Pillow
-folium
-spaCy
-colorama
-cryptg
-validate_email_address
-networkx
-openpyxl
-transformers
+# pandas
+# reportlab
+# matplotlib
+# pytz
+# tzlocal
+# Pillow
+# folium
+# spaCy
+# colorama
+# cryptg
+# validate_email_address
+# networkx
+# openpyxl
+# transformers
 
 # AI 챗봇에 필요한 패키지
 langchain
@@ -49,7 +50,9 @@ langchain-teddynote # langchain 관련 기능을 보다 더 편리하게 사용�
 langgraph-checkpoint-sqlite
 IPython
 
+
 # 클러스터링에 필요한 패키지
 torch
+transformers
 scikit-learn
 python-louvain
