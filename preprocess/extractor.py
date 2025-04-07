@@ -72,8 +72,3 @@ def extract_telegram_links(data: Union[str, list[str]]) -> list[str]:
                          f"got {type(data)}.")
         return []
 
-
-
-
-if __name__ == "__main__":
-    print(extract_telegram_links("http://t.me/+sample"))
