@@ -1,14 +1,13 @@
 import logging
 
 from bs4 import BeautifulSoup
-import os
 
 from server.logger import logger
 from server.db import get_mongo_collection, DB
 from typing import Optional, Union
 
-def extract_text_blocks_from_html(html) -> list:
-    # HTML 문서에서 텍스트 블록 추출
+def extract_text_blocks_from_html(html) -> list[str]:
+    # BeautifulSoup 패키지의 기능을 이용해서 HTML 문서에서 텍스트 블록 추출
     soup = BeautifulSoup(html, "html.parser")
     text_blocks = soup.get_text(separator=" ").split("\n")
     text_blocks = [block.strip() for block in text_blocks if block.strip()]  # 빈 줄 제거
