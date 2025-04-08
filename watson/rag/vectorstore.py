@@ -97,7 +97,7 @@ class VectorStoreMethods:
             loader = MongodbLoader(
                 connection_string=get_mongo_connection_string(),
                 db_name=DB.NAME,
-                collection_name=DB.COLLECTION.CHANNEL.DATA,
+                collection_name="channel_data",
                 filter_criteria={} if self.scope == "global" else {
                     "channelId": {"$in": channel_ids}
                 },  # 데이터베이스에서 조회할 기준 (쿼리)

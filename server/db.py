@@ -1,4 +1,6 @@
 import os
+from typing import Any, Mapping, Union
+
 import pymongo
 from dotenv import load_dotenv
 from pymongo.synchronous.collection import Collection
@@ -12,25 +14,24 @@ def get_mongo_connection_string() -> str:
             f"@{os.environ.get('DB_IP')}"
             f":{os.environ.get('DB_PORT')}/")
 
-def get_mongo_client() -> pymongo.MongoClient:
-    return pymongo.MongoClient(get_mongo_connection_string())
+mongo_client = pymongo.MongoClient(get_mongo_connection_string()) # MongoDB 클라이언트 생성
 
-def get_mongo_database(database_name) -> Database:
-    return get_mongo_client()[database_name]
-
-def get_mongo_collection(db, collection) -> Collection:
-    return get_mongo_database(db)[collection]
+db_name = os.environ.get('DB_NAME')
+db_object: Database = mongo_client[os.environ.get('DB_NAME')]
 
 class Database:
     class Collection:
         class Channel:
-            INFO = "channel_info"
-            DATA = "channel_data"
-            SIMILARITY = "channel_similarity"
-        CHANNEL = Channel
-        DRUGS = "drugs"
-        ARGOT = "argot"
-        CHATBOT = "chat_bot"
+            INFO: Collection = db_object["channel_info"]
+            DATA: Collection = db_object["channel_data"]
+            SIMILARITY: Collection = db_object["channel_similarity"]
+        CHANNEL: Collection = Channel
+        DRUGS: Collection = db_object["drugs"]
+        ARGOT: Collection = db_object["argot"]
+        CHATBOT: Collection = db_object["chat_bot"]
+
     COLLECTION = Collection
-    NAME = os.environ.get('DB_NAME')
+    OBJECT = db_object
+    NAME = db_name
+
 DB = Database

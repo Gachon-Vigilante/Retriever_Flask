@@ -6,7 +6,8 @@ import os
 from pymongo import MongoClient
 
 from preprocess.extractor import argot_dictionary
-from server.db import get_mongo_client, DB
+from server.cypher import run_cypher, Neo4j
+from server.db import DB
 from server.logger import logger
 from server.google import *
 
@@ -64,15 +65,12 @@ class ChannelContentMethods:
             # GCS 버킷에 채팅방 ID로 폴더 생성
             create_folder(default_bucket_name, entity.id)
 
-            # MongoDB client 생성
-            mongo_client = get_mongo_client()
-
             async for message in self.client.iter_messages(entity):
                 post_count += 1
                 if post_count % 10 == 0:
                     logger.info(f"{post_count} Posts is scraped from {channel_key}")
 
-                await process_message(entity, self.client, message, mongo_client)
+                await process_message(entity, self.client, message)
 
         except Exception as e:
             msg = f"An error occurred in scrape_channel_content(): {e}"
@@ -99,39 +97,86 @@ class ChannelContentMethods:
         return future.result()  # 블로킹 호출 (결과를 기다림)
 
 
-async def process_message(entity, client, message, mongo_client:MongoClient) -> None:
-    chat_collection = mongo_client[DB.NAME][DB.COLLECTION.CHANNEL.DATA]  # 채팅 컬렉션 선택
-    argot_collection = mongo_client[DB.NAME][DB.COLLECTION.ARGOT] # 은어 컬렉션 선택
-    drugs_collection = mongo_client[DB.NAME][DB.COLLECTION.DRUGS] # 마약류 컬렉션 선택
+async def process_message(entity, client, message) -> None:
+    chat_collection = DB.COLLECTION.CHANNEL.DATA  # 채팅 컬렉션 선택
+    argot_collection = DB.COLLECTION.ARGOT # 은어 컬렉션 선택
+    drugs_collection = DB.COLLECTION.DRUGS # 마약류 컬렉션 선택
 
+    argot_list, drugs_list, argot_names = [], [], []
+    # 은어가 메세지에서 발견될 경우 발견된 은어들과 그 은어에 대응하는 마약류를 리스트로 생성
+    for argot in argot_collection.find():
+        if message.text and (argot_name:=argot.get("name")) in message.text:
+            argot_list.append(argot["_id"])
+            argot_names.append(argot_name)
+            drug = drugs_collection.find_one({"_id": argot.get("drugId")})
+            drugs_list.append(drug.get("_id"))
+
+            ##### Neo4j #####
+            # 채널과 발견된 은어 간의 관계를 Neo4j 그래프 데이터베이스에 추가
+            # 먼저 은어 노드가 데이터베이스에 없을 경우 추가
+            summary = run_cypher(query=Neo4j.QueryTemplate.Node.Argot.MERGE,
+                                 parameters={
+                                     "name": argot_name
+                                 }).consume()
+            if summary.counters.nodes_created > 0:
+                logger.info(f"새로운 마약 용어가 발견되어 Neo4j 데이터베이스에 추가되었습니다. 발견된 채널의 ID: {entity.id}, 은어: `{argot_name}`")
+            # 마약류 노드가 데이터베이스에 없을 경우 추가
+            summary = run_cypher(query=Neo4j.QueryTemplate.Node.Drug.MERGE,
+                                 parameters={
+                                     "id": drug.get("_id"),
+                                     "name": drug.get("drugName"),
+                                     "type": drug.get("drugType"),
+                                     "englishName": drug.get("drugEnglishName"),
+                                 }).consume()
+            if summary.counters.nodes_created > 0:
+                logger.info(f"새로운 마약류가 발견되어 Neo4j 데이터베이스에 추가되었습니다. 발견된 채널의 ID: {entity.id}, 마약류: `{drug.get("drugName")}`")
+
+            # 판매 관계가 없을 경우 판매 관계를 생성하고, 현재 chatId를 관계의 속성에 추가
+            run_cypher(query=Neo4j.QueryTemplate.Edge.SELLS,
+                       parameters={
+                           "channelId": entity.id,
+                           "argotName": argot_name,
+                           "chatId": message.id,
+                       })
+            # 은어 -> 마약 대응 관계가 없을 경우 관계를 생성
+            run_cypher(query=Neo4j.QueryTemplate.Edge.REFERS_TO,
+                       parameters={
+                           "argotName": argot_name,
+                           "drugId": drug.get("_id"),
+                       })
+
+    if argot_list:
+        logger.debug(
+            f"Argot and Drugs are found in chat(chat ID: {message.id}, channel ID: {entity.id}). Argot: {argot_names}, Drugs: {drugs_list}")
+    
+    ##### MongoDB #####
     # channelId 필드와 id 필드를 기준으로 이미 채팅이 수집되었는지 검사한 후, 아직 수집되지 않았을 경우에만 삽입
     if not chat_collection.find_one({"channelId": entity.id, "id": message.id}):
-        media_data, media_type = await download_media(message, client)
-        if media_data:
-            try:
-                media = {"url": upload_bytes_to_gcs(bucket_name=default_bucket_name,
-                                                    folder_name=entity.id,
-                                                    file_name=message.id,
-                                                    file_bytes=media_data,
-                                                    content_type=media_type),
-                         "type": media_type}
-            except Exception as e:
-                logger.error(f"An error occurred in process_message(), while uploading media to Google Cloud Storage: {e}")
-                media = None
+        # GCS 버킷에 이미 해당 채팅의 파일이 존재하는지 검사하고, 존재하지 않을 경우에만 미디어를 다운로드해서 버킷에 저장
+        if not gcs_file_exists(bucket_name=default_bucket_name,
+                           folder_name=entity.id,
+                           file_name=message.id):
+            media_data, media_type = await download_media(message, client)
+            if media_data:
+                try:
+                    # 미디어를 GCS 버킷에 업로드하고 업로드된 공개 URL을 받아온다.
+                    media = {"url": upload_bytes_to_gcs(bucket_name=default_bucket_name,
+                                                        folder_name=entity.id,
+                                                        file_name=message.id,
+                                                        file_bytes=media_data,
+                                                        content_type=media_type),
+                             "type": media_type}
+                except Exception as e:
+                    logger.error(f"An error occurred in process_message(), while uploading media to Google Cloud Storage: {e}")
+                    media = None
+                else:
+                    logger.debug(f"Google Cloud Storage 버킷에 성공적으로 데이터를 저장했습니다. (Media type: {media_type})")
             else:
-                logger.debug(f"Successfully uploaded media to Google Cloud Storage. (Media type: {media_type})")
+                # 미디어가 없을 경우 media는 None으로
+                media = None
         else:
+            logger.warning("GCS 버킷에 이미 해당 채팅의 미디어가 저장되어 있습니다. 미디어 저장을 건너뜁니다.")
             media = None
-
-        argot_list, drugs_list = [], []
-        # 은어가 메세지에서 발견될 경우 해당 은어와 그 은어에 대응하는 마약류를 channel data로  같이 삽입
-        for argot in argot_collection.find():
-            if message.text and argot.get("name") in message.text:
-                argot_list.append(argot["_id"])
-                drugs_list.append(drugs_collection.find_one({"_id": argot.get("drugId")}).get("_id"))
-
-        if argot_list:
-            logger.debug(f"Argot and Drugs are found in chat(chat ID: {message.id}, channel ID: {entity.id}). Argot: {argot_list}, Drugs: {drugs_list}")
 
         post_data = {
             "channelId": entity.id,
@@ -148,7 +193,7 @@ async def process_message(entity, client, message, mongo_client:MongoClient) -> 
 
         chat_collection.insert_one(post_data)
         
-    else: # 이미 수집된 채팅일 경우 경고 출력
+    else: # 이미 수집된 채팅일 경우 경고만 출력
         logger.warning(
             f"MongoDB collection already has same unique index of a chat(channelId: {entity.id}, id: {message.id})")
 

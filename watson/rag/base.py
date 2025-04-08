@@ -96,7 +96,6 @@ class BaseWatson:
 
 
     def __init__(self: 'Watson', bot_id: int = None, channel_ids: list[int] = None, scope: str = None):
-
         with self._lock:
             if getattr(self, "_initialized", False):
                 self.update()
