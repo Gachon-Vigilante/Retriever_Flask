@@ -191,13 +191,12 @@ async def process_message(entity, client, message) -> None:
             "argot": argot_list,
             "drugs": drugs_list,
         }
-
         chat_collection.insert_one(post_data)
 
         # channel_info에서 마지막 채팅의 업데이트 시점 갱신
         channel_collection.update_one({"_id": entity.id},
-                                               {"$set": {"updatedAt": message.date}},
-                                               upsert=False)
+                                      {"$set": {"updatedAt": message.date}},
+                                      upsert=False)
 
         
     else: # 이미 수집된 채팅일 경우 경고만 출력
