@@ -77,26 +77,18 @@ class BaseWatson:
 
     def _update_db(self: 'Watson'):
         try:
-            if not chatbot_collection.find_one({"id": self._bot_id}):
-                chatbot_collection.insert_one({
-                    "id": self._bot_id,
-                    "updatedAt": datetime.now(),
-                    "chats": {},
-                    "scope": None,
-                })
-            chatbot_collection.update_one({"id": self._bot_id},
+            chatbot_collection.update_one({"_id": self._bot_id},
                                           {"$set": {
                                               "updatedAt": datetime.now(),
                                               "chats": self.chats,
                                               "scope": self.scope,
-                                          }})
+                                          }}, upsert=True)
         except Exception as e:
             logger.error(f"An error occurred while updating chatbot metadata at MongoDB: {e}")
 
 
 
     def __init__(self: 'Watson', bot_id: int = None, channel_ids: list[int] = None, scope: str = None):
-
         with self._lock:
             if getattr(self, "_initialized", False):
                 self.update()

@@ -3,7 +3,7 @@ import typing
 import datetime
 from pymongo.errors import DuplicateKeyError
 
-from server.db import DB, get_mongo_collection
+from server.db import DB
 from server.logger import logger
 from .channelscraper import ChannelContentMethods
 from .monitor import ChannelContentMonitorMethods
@@ -15,9 +15,7 @@ class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
     def get_channel_info(self:'TelegramManager',
                          channel_key:typing.Union[int, str],
                          ) -> dict:
-        # MongoDB client 생성
-        collection_name = DB.COLLECTION.CHANNEL.INFO
-        collection = get_mongo_collection(DB.NAME, collection_name)  # 컬렉션 선택
+        collection = DB.COLLECTION.CHANNEL.INFO  # 컬렉션 선택
         entity = asyncio.run_coroutine_threadsafe(self.connect_channel(channel_key), self.loop).result()
 
         channel_info = {
@@ -27,7 +25,6 @@ class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
             "restricted": entity.restricted, # 채널에 제한이 있는지 여부 (boolean)
             "startedAt": entity.date, # 채널이 생성된 일시 (datetime.datetime)
             "discoveredAt": datetime.datetime.now(), # 채널이 처음으로 발견된 일시
-            "updatedAt": datetime.datetime.now(), # 채널의 업데이트를 마지막으로 확인한 일시
             "status": "active" if self.check(channel_key) else "inactive",
         }
         try:
@@ -39,13 +36,13 @@ class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
         except Exception as exception:
             logger.error(f"Error occurred while inserting data into MongoDB: {exception}")
         else:
-            logger.info(f"Archived a new channel metadata in MongoDB - DB: {DB.NAME}, collection: {collection_name}")
+            logger.info(f"Archived a new channel metadata in MongoDB - DB: {DB.NAME}, collection: channel_info")
 
         return channel_info
 
 
 def is_channel_empty(channel_id) -> bool:
     """채널 ID에 해당하는 채널의 채팅 데이터가 있는지 여부를 조사하는 함수. 데이터가 없을 때 True 반환."""
-    chat_collection = get_mongo_collection(DB.NAME, DB.COLLECTION.CHANNEL.DATA)
+    chat_collection = DB.COLLECTION.CHANNEL.DATA
     # 채널 ID를 기준으로 모든 채팅을 찾아서 각 채팅의 채팅 ID를 리스트로 생성
     return False if chat_collection.find_one({"channelId": channel_id}) else True

@@ -10,9 +10,18 @@ def create_folder(bucket_name, folder_name):
     blob = bucket.blob(f"{folder_name}/")
     blob.upload_from_string("")  # 빈 파일 업로드
 
+def gcs_file_exists(bucket_name: str, folder_name: str, file_name: str) -> bool:
+    """특정 파일이 GCS 버킷에 이미 있는지 확인하는 함수."""
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+
+    # 폴더 포함한 객체 경로 지정
+    blob = bucket.blob(f"{folder_name}/{file_name}")
+
+    return blob.exists() # 파일의 존재 여부를 확인해서 반환
 
 def upload_bytes_to_gcs(bucket_name, folder_name, file_name, file_bytes, content_type):
-    """ 바이트 객체를 GCS 버킷에 추가하는 함수 """
+    """ 바이트 객체를 GCS 버킷에 추가하는 함수."""
     client = storage.Client()
     bucket = client.bucket(bucket_name)
 

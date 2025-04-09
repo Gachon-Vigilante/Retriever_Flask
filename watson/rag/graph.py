@@ -19,7 +19,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel, Field, Json
 
-from server.db import get_mongo_database, DB
+from server.db import DB
 from server.logger import logger
 
 load_dotenv()
@@ -295,7 +295,7 @@ class LangGraphMethods:
         if state.get("debug"):
             print("\n=== NODE: execute db query ===\n")
         collection_name, pipeline = state["db_query"].collection, state["db_query"].pipeline
-        cursor = get_mongo_database(DB.NAME)[collection_name].aggregate(pipeline) # state["db_query"].pipeline 은 Pydantic 의 Json 형식으로 지정되었으므로 바로 사용 가능
+        cursor = DB.OBJECT[collection_name].aggregate(pipeline) # state["db_query"].pipeline 은 Pydantic 의 Json 형식으로 지정되었으므로 바로 사용 가능
         context = [load_from_dict(doc, content_key="text", metadata_keys=["views", "url", "id", "timestamp"]) for doc in cursor] if collection_name == "channel_data" else list(cursor)
 
         return update_state(state, node_name="execute_db_query", context=context)
