@@ -1,118 +1,104 @@
 from pymongo import MongoClient
 import torch
+import numpy as np
+import re
+from urllib.parse import urlparse
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import MinMaxScaler
-from transformers import BertTokenizer, BertModel
+from transformers import AutoTokenizer, AutoModel
 from bs4 import BeautifulSoup
-from sklearn.decomposition import LatentDirichletAllocation
-from sklearn.feature_extraction.text import CountVectorizer
-import numpy as np
+from tqdm import tqdm
 
-# MongoDB 연결 설정
-client = MongoClient("mongodb://localhost:27017/")
-db = client['local']
-collection = db['train']
-cluster_collection = db['post_clusters']  # 클러스터링 결과 저장 컬렉션
+# MongoDB 연결
+client = MongoClient("mongodb://admin:sherlocked@34.64.57.207:27017/")
+db = client['retriever-woohyuk']
+collection = db['posts']
+cluster_collection = db['post_clusters']
 
-# KoBERT 모델 및 토크나이저 로드
+# KoBERT 모델 불러오기
 model_name = "monologg/kobert"
-tokenizer = BertTokenizer.from_pretrained(model_name)
-model = BertModel.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
 
-# HTML 문서 불러오기
-def fetch_html_documents():
-    documents = collection.find({}, {"_id": 1, "html": 1})
-    return [{"_id": str(doc["_id"]), "html": doc["html"]} for doc in documents if "html" in doc]
-
-# HTML 전처리
+# HTML 정제 함수
 def preprocess_html(html_content):
     soup = BeautifulSoup(html_content, 'html.parser')
     return soup.get_text(separator=' ').strip()
 
-# KoBERT 임베딩 생성
+# KoBERT 임베딩 추출
 def get_bert_embedding(text):
     tokens = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding="max_length")
     with torch.no_grad():
         output = model(**tokens)
     return output.last_hidden_state[:, 0, :].squeeze().tolist()
 
-# 문체 분석 특징 추출
-def extract_text_features(text):
-    words = text.split()
-    return [
-        len(text),  # 전체 길이
-        len(words),  # 단어 개수
-        sum(len(w) for w in words) / len(words) if words else 0,  # 평균 단어 길이
-        text.count(".") / len(words) if words else 0  # 문장 당 마침표 개수
-    ]
+# 도메인 추출
+def extract_domain(url):
+    try:
+        return urlparse(url).netloc
+    except:
+        return None
 
-# LDA 토픽 모델링 적용
-def perform_lda(documents):
-    vectorizer = CountVectorizer(stop_words="english", max_features=1000)
-    X = vectorizer.fit_transform([doc["html"] for doc in documents])
-    lda = LatentDirichletAllocation(n_components=10, random_state=42)
-    lda_topic_vectors = lda.fit_transform(X)  # 학습하고 변환
-    return lda_topic_vectors
+# 텔레그램 채널 ID 추출
+def extract_channel_id(url):
+    match = re.search(r'(t\.me|telegram\.me)/([a-zA-Z0-9_]+)', url)
+    if match:
+        return match.group(2)
+    return None
 
-# DBSCAN 클러스터링
-def dbscan_clustering(similarity_matrix, eps, min_samples):
-    scaler = MinMaxScaler()
-    distance_matrix = scaler.fit_transform(1 - similarity_matrix)
+# 클러스터링 수행
+def dbscan_clustering(embeddings, eps=0.4, min_samples=2):
+    similarity_matrix = cosine_similarity(np.array(embeddings))
+    similarity_matrix = (similarity_matrix + 1) / 2  # 정규화: [-1, 1] → [0, 1]
+
+    distance_matrix = 1 - similarity_matrix
+    distance_matrix = np.clip(distance_matrix, 0, 1)  # 음수 방지
+
     db = DBSCAN(metric="precomputed", eps=eps, min_samples=min_samples)
     return db.fit_predict(distance_matrix)
 
-# 결합된 특징 벡터 생성 함수 (가중치 적용)
-def combine_features_with_weights(embedding, text_feature, lda_topic_vector, embedding_weight=0.6, text_feature_weight=0.3, lda_weight=0.1):
-    # 각 특징 벡터에 가중치를 적용하고 합침
-    weighted_embedding = np.array(embedding) * embedding_weight
-    weighted_text_feature = np.array(text_feature) * text_feature_weight
-    weighted_lda_topic_vector = np.array(lda_topic_vector) * lda_weight
+# 전체 클러스터링 프로세스
+def perform_clustering_with_cosine(eps=0.4, min_samples=2):
+    # 데이터 불러오기
+    documents = list(collection.find({}, {
+        "_id": 1, "postId": 1, "html": 1, "createdAt": 1, "updatedAt": 1, "promoSiteLink": 1
+    }))
 
-    # 가중치를 적용한 벡터 결합
-    return np.concatenate([weighted_embedding, weighted_text_feature, weighted_lda_topic_vector])
+    if not documents:
+        return {"error": "No documents found."}
 
-# 클러스터링 실행 및 MongoDB 저장
-def perform_clustering_with_features(eps=0.4, min_samples=2):
-    documents = fetch_html_documents()
+    # 임베딩 생성
+    embeddings = []
+    for doc in tqdm(documents, desc="Generating embeddings"):
+        text = preprocess_html(doc.get("html", ""))
+        embeddings.append(get_bert_embedding(text))
 
-    embeddings = [get_bert_embedding(preprocess_html(doc["html"])) for doc in documents]
+    # 클러스터링
+    labels = dbscan_clustering(embeddings, eps, min_samples)
 
-    # 문체 분석 특징 추출
-    text_features = [extract_text_features(preprocess_html(doc["html"])) for doc in documents]
+    # 이전 클러스터 데이터 삭제
+    cluster_collection.delete_many({})
 
-    # LDA 토픽 모델링 벡터 추출
-    lda_topic_vectors = perform_lda(documents)
-
-    # 각 문서에 대한 특성 벡터 결합
-    feature_vectors = [
-        combine_features_with_weights(embedding, text_feature, lda_topic_vector)
-        for embedding, text_feature, lda_topic_vector in zip(embeddings, text_features, lda_topic_vectors)
-    ]
-
-    similarity_matrix = cosine_similarity(feature_vectors)
-
-    # DBSCAN 클러스터링
-    labels = dbscan_clustering(similarity_matrix, eps, min_samples)
-
-    # 클러스터링 결과를 MongoDB에 저장
-    cluster_collection.delete_many({})  # 기존 데이터 초기화
-
+    # 클러스터 저장
     for idx, doc in enumerate(documents):
-        cluster_collection.insert_one({
-            "_id": doc["_id"],
+        promo_link = doc.get("promoSiteLink")
+        cluster_data = {
+            "postId": doc.get("postId"),
             "cluster_label": int(labels[idx]),
             "embedding": embeddings[idx],
-            "text_features": text_features[idx],
-            "lda_topic_vector": lda_topic_vectors[idx].tolist()
-        })
+            "promoSiteLink": promo_link,
+            "promoSiteName": extract_domain(promo_link) if promo_link else None,
+            "channelId": extract_channel_id(promo_link) if promo_link else None,
+            "createdAt": doc.get("createdAt"),
+            "updatedAt": doc.get("updatedAt")
+        }
+        cluster_collection.insert_one(cluster_data)
 
-    # 클러스터 통계 정보 저장
+    # 통계 저장
     cluster_collection.insert_one({
         "_id": "cluster_stats",
         "total_documents": len(documents),
         "noise_documents": list(labels).count(-1)
     })
 
-    return {"message": "Clustering results stored successfully in MongoDB."}
-
+    return {"message": "Clustering + promo info 저장 완료!"}
