@@ -105,7 +105,7 @@ class BaseWatson:
 
                 logger.debug(f"메모리에 새로운 챗봇을 로드합니다. Chatbot ID: {self._bot_id}")
                 if self._bot_id:  # bot_id가 입력되었을 경우: 이미 DB에 정보가 저장되어 있으므로 로드.
-                    bot_info = chatbot_collection.find_one({"id": self._bot_id})
+                    bot_info = chatbot_collection.find_one({"_id": self._bot_id})
                     # 데이터베이스에 id가 없으면 아직 생성하지 않은 챗봇에 접근하는 것이므로 오류.
                     if not bot_info:
                         raise KeyError(f"생성한 적이 없는 ID로 챗봇을 불러오려고 시도했습니다. Chatbot ID: {bot_id}")
@@ -120,7 +120,7 @@ class BaseWatson:
                     for channel_id in channel_ids:
                         # 채팅 데이터 collection에서, 참고하려는 채널에서 송수신된 모든 채팅의 채팅 id를 채널 id로 나누어서 저장.
                         # 이 때, scope가 "global"이라면 모든 채널 ID를 불러와서 저장.
-                        self.chats[str(channel_id)] = [chat.get('id') for chat in chat_collection.find(
+                        self.chats[str(channel_id)] = [chat.get('_id') for chat in chat_collection.find(
                             {} if self.scope == self.GLOBAL else {"channelId": channel_id}
                         )]
                     logger.debug(f"새로운 챗봇을 생성했습니다. Chatbot ID: {self._bot_id}")

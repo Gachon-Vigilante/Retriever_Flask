@@ -15,7 +15,6 @@ def merge_lists_remove_duplicates(lists):
 
     return result
 
-import typing
 from typing import get_origin, get_args, Any, Union, Literal
 
 def is_valid_type(value, expected_type):

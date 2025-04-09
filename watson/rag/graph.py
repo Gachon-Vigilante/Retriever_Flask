@@ -4,7 +4,7 @@ from typing import Any, Literal, Annotated, Sequence, TypedDict, Union
 
 from dotenv import load_dotenv
 from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage, BaseMessage
+from langchain_core.messages import HumanMessage, BaseMessage, SystemMessage
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import create_retriever_tool, Tool
@@ -78,12 +78,14 @@ def load_from_dict(data: dict, content_key: str, metadata_keys=None) -> Document
 class LangGraphMethods:
 
     # Root Nodes
-
     @staticmethod
     def ask_question(state:GraphState) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: question ===\n")
-        return update_state(state, node_name="question", question=state["messages"][-1].content)
+        question = state["messages"][-1].content
+        return update_state(state,
+                            node_name="question",
+                            question=question,)
 
     @staticmethod
     def classify_question(state:GraphState) -> Literal["metadata", "data", "history"]:
@@ -95,7 +97,7 @@ class LangGraphMethods:
         # 데이터 모델 정의
         class Classification(BaseModel):
             """A binary score for relevance checks"""
-            binary_classification: str = Field(
+            question_classification: str = Field(
                 description="Response 'metadata' if the question is based on metadata, 'data' if it is based on data, 'history' if it is based on previous chat history between us."
             )
 
@@ -122,15 +124,14 @@ class LangGraphMethods:
         classification_result = chain.invoke({"question": question})
 
         # 관련성 여부에 따른 결정
-        if classification_result.binary_classification == "metadata":
+        if classification_result.question_classification == "metadata":
             if state.get("debug"):
                 print("\n==== [DECISION: METADATA RELEVANT] ====\n")
             return "metadata"
 
-        elif classification_result.binary_classification == "history":
+        elif classification_result.question_classification == "history":
             if state.get("debug"):
                 print("\n==== [DECISION: HISTORY RELEVANT] ====\n")
-            state["context"] = ""
             return "history"
         else:
             if state.get("debug"):
@@ -445,17 +446,18 @@ class LangGraphMethods:
             Remember:
             - It's crucial to base your answer solely on the **PROVIDED CONTEXT**. 
             - DO NOT use any external knowledge or information not present in the given materials.
+            - If the provided context is empty or missing, but there is a prior Q&A history available, you may answer based on the **most relevant information from the previous questions and answers**.
             - If you can't find the source of the answer, you should answer that you don't know.
     
             ###
             
             # Here is the CONTEXT that you should use to answer the question:
             {context}"""
-        # prompt에 state["messages"]를 풀어서 같이 제공한다.
+        # 기존 state["messages"]에 새로운 지시와 질문을 더해서 같이 제공한다.
         # memory를 설정하면 state["messages"]에 계속해서 대화 기록이 저장되기 때문에,
         # 이를 AI가 받아서 이전 채팅 기록에 근거한 답변을 생성할 수 있게 된다.
         prompt = ChatPromptTemplate.from_messages([
-            *(state["messages"]),
+            *state["messages"],
             ("system", indication),
             ("human", "{question}"),
         ])
@@ -467,8 +469,10 @@ class LangGraphMethods:
         rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
 
         # 답변 생성
-        response = rag_chain.invoke({"context": state["context"], "question": state["question"]})
-        return update_state(state, node_name="generate", messages=[response])
+        response = rag_chain.invoke({"context": state.get("context", ""),
+                                     "question": state.get("question", ""),})
+
+        return update_state(state, node_name="generate", messages=[response], context="") # 이전 질문에서 얻어낸 context가 다음 historical 질문에 영향을 주지 않도록 context 초기화
 
 
     def build_graph(self:'Watson') -> CompiledStateGraph:
