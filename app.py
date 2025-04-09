@@ -8,10 +8,6 @@ from dotenv import load_dotenv
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.append(current_dir)
-# 현재 app.py 파일의 디렉토리의 부모 디렉토리 경로를 sys.path에 추가
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if parent_dir not in sys.path:
-    sys.path.append(parent_dir)
 
 # 현재 작업 디렉토리 (실행 시, 커맨드라인에서 지정된 디렉토리)
 current_working_directory = os.getcwd()
@@ -38,6 +34,13 @@ from watson import watson_bp
 app.register_blueprint(watson_bp)
 from clustering import cluster_bp
 app.register_blueprint(cluster_bp)
+
+# 등록된 모든 라우트 출력
+with app.app_context():
+    all_routes = ""
+    for rule in app.url_map.iter_rules():
+        all_routes += f"{rule.endpoint:20s} | {rule.methods} | {rule}\n"
+    logger.debug(all_routes)
 
 if __name__ == "__main__":
     logger.info("Flask server has started!")

@@ -4,12 +4,12 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from transformers import AutoTokenizer, AutoModel
 
+from server.db import Database
+
 # MongoDB 연결
-client = MongoClient("mongodb://admin:sherlocked@34.64.57.207:27017/")
-db = client['retriever-woohyuk']
-collection = db['channel_data']
-similarity_collection = db['channel_similarity']
-drug_collection = db['drugs']
+collection = Database.Collection.Channel.DATA
+similarity_collection = Database.Collection.Channel.SIMILARITY
+drug_collection = Database.Collection.DRUGS
 
 # KoBERT 모델 로딩
 model_name = "monologg/kobert"

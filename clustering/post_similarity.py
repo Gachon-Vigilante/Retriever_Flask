@@ -5,11 +5,11 @@ from transformers import AutoTokenizer, AutoModel
 from bs4 import BeautifulSoup
 import numpy as np
 
+from server.db import Database
+
 # MongoDB 연결
-client = MongoClient("mongodb://admin:sherlocked@34.64.57.207:27017/")
-db = client['retriever-woohyuk']
-collection = db['posts']
-similarity_collection = db['post_similarity']  # 유사도 결과 저장 컬렉션
+collection = Database.Collection.POST
+similarity_collection = Database.Collection.POST_SIMILARITY  # 유사도 결과 저장 컬렉션
 
 # KoBERT 모델 및 토크나이저 로드
 model_name = "monologg/kobert"

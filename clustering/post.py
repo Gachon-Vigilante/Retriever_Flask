@@ -9,11 +9,12 @@ from transformers import AutoTokenizer, AutoModel
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
+from server.db import Database
+from server.logger import logger
+
 # MongoDB 연결
-client = MongoClient("mongodb://admin:sherlocked@34.64.57.207:27017/")
-db = client['retriever-woohyuk']
-collection = db['posts']
-cluster_collection = db['post_clusters']
+collection = Database.Collection.POST
+cluster_collection = Database.Collection.POST_CLUSTERS
 
 # KoBERT 모델 불러오기
 model_name = "monologg/kobert"

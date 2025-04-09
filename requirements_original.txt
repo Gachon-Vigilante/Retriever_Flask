@@ -56,3 +56,6 @@ torch
 transformers
 scikit-learn
 python-louvain
+
+# Tokenizing에 필요한 패키지
+sentencepiece

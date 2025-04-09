@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from . import post, post_similarity
 from .channel import calculate_and_store_channel_similarity
 from .drug_stat import drug_time, drug_type
-from .post import dbscan_clustering, collection, db, perform_clustering_with_cosine
+from .post import dbscan_clustering, collection, perform_clustering_with_cosine
 from .post_similarity import post_similarity
 # Blueprint 설정
 cluster_bp = Blueprint('cluster', __name__, url_prefix='/cluster')
@@ -14,7 +14,7 @@ def post_clustering():
         return jsonify({"error": "Request must be in JSON format"}), 400
 
     data = request.json
-    eps = data.get('eps', 0.4)  # 기본값 수정
+    eps = data.get('eps', 0.4)  # 기본값은 0.4
     min_samples = data.get('min_samples', 2)
 
     try:

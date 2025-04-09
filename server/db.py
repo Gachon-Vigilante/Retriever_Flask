@@ -29,6 +29,9 @@ class Database:
         DRUGS: Collection = db_object["drugs"]
         ARGOT: Collection = db_object["argot"]
         CHATBOT: Collection = db_object["chat_bot"]
+        POST: Collection = db_object["posts"]
+        POST_CLUSTERS: Collection = db_object["post_clusters"]
+        POST_SIMILARITY: Collection = db_object["post_similarity"]
 
     COLLECTION = Collection
     OBJECT = db_object
