@@ -38,6 +38,11 @@ class Neo4j:
                     })
                     RETURN c;
                 """
+                MERGE = """
+                    MERGE (c:Channel {id: $id})
+                    ON CREATE SET d.name = $name, d.type = $type, d.englishName = $englishName
+                    RETURN d;
+                """
 
             class Argot:
                 CREATE = """

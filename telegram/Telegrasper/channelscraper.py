@@ -7,7 +7,7 @@ from pymongo import MongoClient
 
 from preprocess.extractor import argot_dictionary
 from server.cypher import run_cypher, Neo4j
-from server.db import DB
+from server.db import DB, Database
 from server.logger import logger
 from server.google import *
 
@@ -98,7 +98,8 @@ class ChannelContentMethods:
 
 
 async def process_message(entity, client, message) -> None:
-    chat_collection = DB.COLLECTION.CHANNEL.DATA  # 채팅 컬렉션 선택
+    chat_collection = Database.Collection.Channel.DATA  # 채팅 컬렉션 선택
+    channel_collection = Database.Collection.Channel.INFO
     argot_collection = DB.COLLECTION.ARGOT # 은어 컬렉션 선택
     drugs_collection = DB.COLLECTION.DRUGS # 마약류 컬렉션 선택
 
@@ -192,6 +193,12 @@ async def process_message(entity, client, message) -> None:
         }
 
         chat_collection.insert_one(post_data)
+
+        # channel_info에서 마지막 채팅의 업데이트 시점 갱신
+        channel_collection.update_one({"_id": entity.id},
+                                               {"$set": {"updatedAt": message.date}},
+                                               upsert=False)
+
         
     else: # 이미 수집된 채팅일 경우 경고만 출력
         logger.warning(

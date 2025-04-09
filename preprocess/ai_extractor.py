@@ -9,6 +9,19 @@ from preprocess.extractor import extract_text_blocks_from_html
 
 MODEL_NAME = get_model_name(LLMs.GPT4o_MINI)
 
+# 글의 내용 분석 결과를 저장하는 데이터 모델 정의
+class Analysis(BaseModel):
+    """A binary score for relevance checks"""
+    binary_classification: bool = Field(
+        description="Return True if the given HTML content clearly contains promotion of drug sales; otherwise, return False."
+    )
+    promotion_content: str = Field(
+        description="If there is clear evidence of drug sales, return the promotional content as promotion_content. If not, return an empty string. Do not translate the promotional content; extract and return it exactly as it appears in the original input. (e.g. if the original input was Korean, return it in Korean.)"
+    )
+    telegram_keys: list[str] = Field(
+        description="If there is clear evidence of drug sales, return a list of strings that appear to be Telegram addresses, @usernames, or invitation links. If not, return an empty list."
+    )
+
 def extract_promotion_by_openai(html: str) -> dict[str, str]:
     """OpenAI 의 API를 사용해 마약 홍보 정보를 추출하는 API.
     gpt-4o-mini 모델을 사용해서, 마약 홍보글인지 여부와 만약 그렇다면 발견되는 텔레그램 주소를 반환한다."""
@@ -16,18 +29,6 @@ def extract_promotion_by_openai(html: str) -> dict[str, str]:
     # 전체 HTMl 텍스트를 블록으로 분할
     text_blocks = extract_text_blocks_from_html(html)
 
-    # 글의 내용 분석 결과를 저장하는 데이터 모델 정의
-    class Analysis(BaseModel):
-        """A binary score for relevance checks"""
-        binary_classification: bool = Field(
-            description="Return True if the given HTML content clearly contains promotion of drug sales; otherwise, return False."
-        )
-        promotion_content: str = Field(
-            description="If there is clear evidence of drug sales, return the promotional content as promotion_content. If not, return an empty string. Do not translate the promotional content; extract and return it exactly as it appears in the original input. (e.g. if the original input was Korean, return it in Korean.)"
-        )
-        telegram_keys: list[str] = Field(
-            description= "If there is clear evidence of drug sales, return a list of strings that appear to be Telegram addresses, @usernames, or invitation links. If not, return an empty list."
-        )
 
     # LLM 모델 초기화 -> 구조화된 출력을 위한 LLM 설정
     llm_with_structured_output = ChatOpenAI(temperature=0,
