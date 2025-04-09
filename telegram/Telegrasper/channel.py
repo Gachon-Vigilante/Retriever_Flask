@@ -25,7 +25,6 @@ class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
             "restricted": entity.restricted, # 채널에 제한이 있는지 여부 (boolean)
             "startedAt": entity.date, # 채널이 생성된 일시 (datetime.datetime)
             "discoveredAt": datetime.datetime.now(), # 채널이 처음으로 발견된 일시
-            "updatedAt": datetime.datetime.now(), # 채널의 업데이트를 마지막으로 확인한 일시
             "status": "active" if self.check(channel_key) else "inactive",
         }
         try:
