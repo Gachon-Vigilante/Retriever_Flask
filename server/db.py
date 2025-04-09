@@ -28,6 +28,8 @@ class Database:
             DATA = "channel_data"
             SIMILARITY = "channel_similarity"
         CHANNEL = Channel
+        DRUGS = "drugs"
+        ARGOT = "argot"
         CHATBOT = "chat_bot"
     COLLECTION = Collection
     NAME = os.environ.get('DB_NAME')

@@ -113,18 +113,22 @@ def request_api(**request_kwargs):
     else:
         return requests.models.Response()
 
+class ApiResponse:
+    def __init__(self, response):
+        self.status_code = response.status_code
+        try:
+            self.data = response.json()
+        except Exception as e:
+            self.data = response.reason
+
+    def __repr__(self):
+        string = f"status: {self.status_code}\nresponse:"
+        if isinstance(self.data, dict):
+            for key, value in self.data.items():
+                string += f"\n\t{key}: {value}"
+        else:
+            string += f"\t{self.data}"
+        return string
 
 def api_test(**request_kwargs):
-    response = request_api(**request_kwargs)
-    try:
-        result = response.json()
-    except Exception as e:
-        result = response.reason
-
-    print(f"status: {response.status_code}")
-    print(f"response:")
-    if isinstance(result, dict):
-        for key, value in result.items():
-            print(f"\t{key}: {value}")
-    else:
-        print(result)
+    return ApiResponse(request_api(**request_kwargs))

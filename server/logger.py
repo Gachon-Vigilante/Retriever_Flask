@@ -140,7 +140,6 @@ class ModuleFilter(logging.Filter):
 
         # 현재 환경의 site-packages 경로 (보통 가상환경 안에 있음)
         self.site_packages_path = os.path.abspath(sysconfig.get_paths()["purelib"])
-        print(self.site_packages_path)
 
     def filter(self, record):
         record_path = os.path.abspath(record.pathname)

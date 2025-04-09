@@ -39,10 +39,6 @@ app.register_blueprint(watson_bp)
 from clustering import cluster_bp
 app.register_blueprint(cluster_bp)
 
-logger.debug("Currently registered routes:")
-for rule in app.url_map.iter_rules():
-    logger.debug(f"Route: {rule}, Methods: {rule.methods}, Endpoint: {rule.endpoint}")
-
 if __name__ == "__main__":
     logger.info("Flask server has started!")
     app.run(host="0.0.0.0", port=5000)

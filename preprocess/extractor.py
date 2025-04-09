@@ -1,13 +1,13 @@
 import logging
 
 from bs4 import BeautifulSoup
-import os
 
 from server.logger import logger
+from server.db import get_mongo_collection, DB
 from typing import Optional, Union
 
-def extract_text_blocks_from_html(html) -> list:
-    # HTML 문서에서 텍스트 블록 추출
+def extract_text_blocks_from_html(html) -> list[str]:
+    # BeautifulSoup 패키지의 기능을 이용해서 HTML 문서에서 텍스트 블록 추출
     soup = BeautifulSoup(html, "html.parser")
     text_blocks = soup.get_text(separator=" ").split("\n")
     text_blocks = [block.strip() for block in text_blocks if block.strip()]  # 빈 줄 제거
@@ -17,17 +17,17 @@ def extract_text_blocks_from_html(html) -> list:
 
 import json
 
-# json 파일에서 마약 은어/약어 로드(추후 데이터베이스에서 로드하도록 변경)
-# 모듈 기준으로 drug_dictionary.json 파일 경로 계산
-current_dir = os.path.dirname(__file__)  # 현재 파일(extractor.py)의 디렉토리
-dictionary_path = os.path.join(current_dir, "drug_dictionary.json")
-with open(dictionary_path, "r", encoding="utf-8") as filestream:
-    dictionary = json.load(filestream)
+# 데이터베이스에서 마약 은어/약어 로드(추후 데이터베이스에서 로드하도록 변경)
+argot_collection = get_mongo_collection(DB.NAME, DB.COLLECTION.ARGOT)
+drugs_collection = get_mongo_collection(DB.NAME, DB.COLLECTION.DRUGS)
+argot_dictionary = dict()
+for argot in argot_collection.find():
+    argot_dictionary[argot["name"]] = argot["drugId"]
 
 # 텍스트 길이가 가장 길고 특정 텍스트를 포함하는 원소를 반환하는 함수
 def extract_by_length(strings: Union[str, list[str]]) -> Optional[str]:
     # 은어/약어 사전에 맞는 문자열들을 필터링
-    filtered_strings = [chunk for chunk in strings if sum(keyword in chunk for keyword in dictionary) >= 3]
+    filtered_strings = [chunk for chunk in strings if sum(keyword in chunk for keyword in argot_dictionary) >= 3]
 
     # 조건에 맞는 문자열이 있다면 가장 긴 문자열을 글 내용으로 반환하고, 없다면 None 반환
     return str(max(filtered_strings, key=len)) if filtered_strings else None
@@ -72,8 +72,3 @@ def extract_telegram_links(data: Union[str, list[str]]) -> list[str]:
                          f"got {type(data)}.")
         return []
 
-
-
-
-if __name__ == "__main__":
-    print(extract_telegram_links("http://t.me/+sample"))

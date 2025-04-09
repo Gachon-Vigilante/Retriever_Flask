@@ -7,7 +7,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, BaseMessage
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import create_retriever_tool
+from langchain_core.tools import create_retriever_tool, Tool
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI
 from langchain_teddynote.models import get_model_name, LLMs
@@ -62,6 +62,7 @@ class GraphState(TypedDict):
     debug: Annotated[bool, "Debug"]
 
 def update_state(state: GraphState, node_name:str, **updates) -> GraphState:
+    """Graph의 State를 입력받고, 입력받은 State에서 **updates로 받은 딕셔너리를 반영해서 수정된 State를 반환하는 함수."""
     new_state: GraphState = state.copy()
     new_state.update(**updates)
     return new_state
@@ -302,7 +303,7 @@ class LangGraphMethods:
 
     # 데이터 기반 질문에 대응하는 Graph Branch
     @staticmethod
-    def execute_retriever(state:GraphState, retriever_tool:VectorStoreRetriever) -> GraphState:
+    def execute_retriever(state:GraphState, retriever_tool:Tool) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: execute retriever ===\n")
         # rewrite_question에서 넘어온 경우에 원래 질문에서 바뀐 다른 새로운 질문을 입력해야 하므로, 현재 상태에서 마지막 메시지(질문) 추출.
@@ -563,15 +564,24 @@ class LangGraphMethods:
         }
 
         # config 설정(재귀 최대 횟수, thread_id)
-        config = RunnableConfig(recursion_limit=10, configurable={"thread_id": self._bot_id})
+        config = RunnableConfig(recursion_limit=15, configurable={"thread_id": self._bot_id})
 
         # 그래프를 스트리밍하려면:
         # stream_graph(self._graph, inputs, config, list(self._graph.nodes.keys()))
-        answer = self._graph.invoke(
-            inputs, # 질문 입력
-            # 세션 ID 기준으로 대화를 기록. 현재는 세션 ID가 고정이라서 bot 하나당 하나의 세션만 유지됨.
-            config=config
-        )["messages"][-1].content if self._graph else self.error_msg_for_empty_data
+        # RecursionError에 대비해서 미리 상태 백업
+        saved_state = self._graph.get_state(config)
+
+        try:
+            answer = self._graph.invoke(
+                inputs, # 질문 입력
+                # 세션 ID 기준으로 대화를 기록. 현재는 세션 ID가 고정이라서 bot 하나당 하나의 세션만 유지됨.
+                config=config
+            )["messages"][-1].content if self._graph else self.error_msg_for_empty_data
+        except RecursionError as e:
+            # RecursionError 발생 시, answer에 대응 메세지를 대입하고 graph를 안전한 상태로 롤백
+            answer = "답변을 생성하지 못했습니다. 질문이 이해하기 어렵거나, 마약 텔레그램 채널과 관련 없는 내용인 것 같습니다. 질문을 바꿔서 다시 입력해 보세요."
+            self._graph.update_state(config, saved_state.values)
+
         logger.info(f"Chatbot answered to a question. Q: '{question}', A: '{answer}'")
         return answer
 
@@ -580,14 +590,15 @@ class LangGraphMethods:
         """
             주어진 세션(session_id)에 해당하는 메시지 히스토리를 삭제하는 메서드.
         """
-        query1 = f"DELETE FROM `checkpoints` WHERE `thread_id` = ?"
-        query2 = f"DELETE FROM `writes` WHERE `thread_id` = ?"
+        query1 = "DELETE FROM `checkpoints` WHERE `thread_id` = ?"
+        query2 = "DELETE FROM `writes` WHERE `thread_id` = ?"
         connection = sqlite3.connect(self.SQLITE_CONNECTION_STRING, check_same_thread=False)
         cursor = connection.cursor()
         cursor.execute(query1, (self._bot_id,))
         cursor.execute(query2, (self._bot_id,))
         connection.commit()
         cursor.close()
+
 
     def get_snapshot(self: 'Watson'):
         # 그래프 상태 스냅샷 생성해서 반환
