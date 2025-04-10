@@ -4,7 +4,7 @@ from telethon import events
 
 from .channelscraper import process_message
 from .utils import *
-from server.db import DB
+from server.db import Database
 from server.logger import logger
 
 if typing.TYPE_CHECKING:
@@ -29,8 +29,6 @@ class ChannelContentMonitorMethods:
         # 새로운 이벤트 핸들러 정의 (채널별로 별도 핸들러를 생성하기 위해, 함수 내에서 동적으로 선언)
         async def event_handler(event):
             """ 메세지가 발생하면 반응하기 위한 핸들러의 비동기 함수 """
-            collection = DB.COLLECTION.CHANNEL.DATA  # 컬렉션 선택
-    
             chat = await event.get_chat()
             # 이벤트가 채팅방 이벤트이고, 메세지가 있고, 해당 메세지가 아직 수집되지 않은 것일 때에만
             if chat and event.message:

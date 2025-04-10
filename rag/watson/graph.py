@@ -1,6 +1,6 @@
 import sqlite3
 import typing
-from typing import Any, Literal, Annotated, Sequence, TypedDict, Union
+from typing import Any, Literal, Annotated, Sequence, TypedDict, Union, Optional
 
 from dotenv import load_dotenv
 from langchain_core.documents import Document
@@ -19,13 +19,14 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel, Field, Json
 
-from server.db import DB
+from server.db import Database
 from server.logger import logger
+from .memory import checkpointer
 
 load_dotenv()
 
 if typing.TYPE_CHECKING:
-    from watson.watson import Watson
+    from rag.watson import Watson
 
 # 최신 모델이름 가져오기
 MODEL_NAME = get_model_name(LLMs.GPT4o)
@@ -75,8 +76,7 @@ def load_from_dict(data: dict, content_key: str, metadata_keys=None) -> Document
                     metadata={key: data[key] for key in data.keys() if key in metadata_keys})
 
 
-class LangGraphMethods:
-
+class LangGraphMethods():
     # Root Nodes
     @staticmethod
     def ask_question(state:GraphState) -> GraphState:
@@ -97,7 +97,7 @@ class LangGraphMethods:
         # 데이터 모델 정의
         class Classification(BaseModel):
             """Classification result for user question."""
-            binary_classification: str = Field(
+            question_classification: str = Field(
                 description="Response 'metadata' if the question is based on metadata, 'data' if it is based on data, 'history' if it is based on previous chat history between us."
             )
 
@@ -296,7 +296,7 @@ class LangGraphMethods:
         if state.get("debug"):
             print("\n=== NODE: execute db query ===\n")
         collection_name, pipeline = state["db_query"].collection, state["db_query"].pipeline
-        cursor = DB.OBJECT[collection_name].aggregate(pipeline) # state["db_query"].pipeline 은 Pydantic 의 Json 형식으로 지정되었으므로 바로 사용 가능
+        cursor = Database.OBJECT[collection_name].aggregate(pipeline) # state["db_query"].pipeline 은 Pydantic 의 Json 형식으로 지정되었으므로 바로 사용 가능
         context = [load_from_dict(doc, content_key="text", metadata_keys=["views", "url", "id", "timestamp"]) for doc in cursor] if collection_name == "channel_data" else list(cursor)
 
         return update_state(state, node_name="execute_db_query", context=context)
@@ -446,7 +446,8 @@ class LangGraphMethods:
             Remember:
             - It's crucial to base your answer solely on the **PROVIDED CONTEXT**. 
             - DO NOT use any external knowledge or information not present in the given materials.
-            - If the provided context is empty or missing, but there is a prior Q&A history available, you may answer based on the **most relevant information from the previous questions and answers**.
+            - If the provided context is empty or missing, but there is a prior Q&A history available, you may answer based on the the previous questions and answers.
+            - When the user asks a question like "What did I ask earlier?" or "What was your previous answer?", you must refer to the previous messages in this conversation.
             - If you can't find the source of the answer, you should answer that you don't know.
     
             ###
@@ -475,10 +476,13 @@ class LangGraphMethods:
         return update_state(state, node_name="generate", messages=[response], context="") # 이전 질문에서 얻어낸 context가 다음 historical 질문에 영향을 주지 않도록 context 초기화
 
 
-    def build_graph(self:'Watson') -> CompiledStateGraph:
+    def build_graph(self:'Watson') -> Optional[CompiledStateGraph]:
+        if not self.chats:
+            return None
+
         # 도구 초기화
         retriever_tool = create_retriever_tool(
-            retriever=self._vectorstore.as_retriever(search_kwargs={"k": 6}),  # 6개의 문서 검색,
+            retriever=self.vectorstore.as_retriever(search_kwargs={"k": 6}),  # 6개의 문서 검색,
             name="retrieve_chats_in_telegram_channel",
             description="Searches and returns a few chat messages from the Telegram channel that are most relevant to the question.",
             document_prompt=PromptTemplate.from_template(
@@ -545,16 +549,12 @@ class LangGraphMethods:
         # 그래프 종료
         workflow.add_edge("generate", END)
 
-        # 메모리 저장소 생성
-        conn = sqlite3.connect(self.SQLITE_CONNECTION_STRING, check_same_thread=False)
-        memory = SqliteSaver(conn)
-
         logger.debug("Built a new LangGraph Workflow.")
-        return workflow.compile(checkpointer=memory)
+        return workflow.compile(checkpointer=checkpointer)
 
-    def _load_graph(self: 'Watson'):
-        if not self._graph:
-            self._graph = self.build_graph()
+    def _update_graph(self: 'Watson'):
+        self.graph = self.build_graph()
+
 
 
     # 체인 실행(Run Chain)
@@ -568,42 +568,31 @@ class LangGraphMethods:
         }
 
         # config 설정(재귀 최대 횟수, thread_id)
-        config = RunnableConfig(recursion_limit=15, configurable={"thread_id": self._bot_id})
+        config = RunnableConfig(recursion_limit=15, configurable={"thread_id": self.id})
 
         # 그래프를 스트리밍하려면:
-        # stream_graph(self._graph, inputs, config, list(self._graph.nodes.keys()))
+        # stream_graph(self.graph, inputs, config, list(self.graph.nodes.keys()))
         # RecursionError에 대비해서 미리 상태 백업
-        saved_state = self._graph.get_state(config)
 
-        try:
-            answer = self._graph.invoke(
-                inputs, # 질문 입력
-                # 세션 ID 기준으로 대화를 기록. 현재는 세션 ID가 고정이라서 bot 하나당 하나의 세션만 유지됨.
-                config=config
-            )["messages"][-1].content if self._graph else self.error_msg_for_empty_data
-        except RecursionError as e:
-            # RecursionError 발생 시, answer에 대응 메세지를 대입하고 graph를 안전한 상태로 롤백
-            answer = "답변을 생성하지 못했습니다. 질문이 이해하기 어렵거나, 마약 텔레그램 채널과 관련 없는 내용인 것 같습니다. 질문을 바꿔서 다시 입력해 보세요."
-            self._graph.update_state(config, saved_state.values)
+        if self.graph:
+            saved_state = self.graph.get_state(config)
+            try:
+                answer = self.graph.invoke(
+                    inputs, # 질문 입력
+                    # 세션 ID 기준으로 대화를 기록. 현재는 세션 ID가 고정이라서 bot 하나당 하나의 세션만 유지됨.
+                    config=config
+                )["messages"][-1].content
+            except RecursionError as e:
+                # RecursionError 발생 시, answer에 대응 메세지를 대입하고 graph를 안전한 상태로 롤백
+                answer = "답변을 생성하지 못했습니다. 질문이 이해하기 어렵거나, 마약 텔레그램 채널과 관련 없는 내용인 것 같습니다. 질문을 바꿔서 다시 입력해 보세요."
+                self.graph.update_state(config, saved_state.values)
 
-        logger.info(f"Chatbot answered to a question. Q: '{question}', A: '{answer}'")
-        return answer
-
-
-    def clear_message_history(self: 'Watson'):
-        """
-            주어진 세션(session_id)에 해당하는 메시지 히스토리를 삭제하는 메서드.
-        """
-        query1 = "DELETE FROM `checkpoints` WHERE `thread_id` = ?"
-        query2 = "DELETE FROM `writes` WHERE `thread_id` = ?"
-        connection = sqlite3.connect(self.SQLITE_CONNECTION_STRING, check_same_thread=False)
-        cursor = connection.cursor()
-        cursor.execute(query1, (self._bot_id,))
-        cursor.execute(query2, (self._bot_id,))
-        connection.commit()
-        cursor.close()
+            logger.info(f"Chatbot answered to a question. Q: '{question}', A: '{answer}'")
+            return answer
+        else:
+            return self.error_msg_for_empty_data
 
 
     def get_snapshot(self: 'Watson'):
         # 그래프 상태 스냅샷 생성해서 반환
-        return self._graph.get_state(config=RunnableConfig(configurable={"thread_id": self._bot_id}))
+        return self.graph.get_state(config=RunnableConfig(configurable={"thread_id": self.id}))

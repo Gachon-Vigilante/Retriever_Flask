@@ -30,7 +30,7 @@ from preprocess import preprocess_bp
 app.register_blueprint(preprocess_bp)
 from telegram import telegram_bp
 app.register_blueprint(telegram_bp)
-from watson import watson_bp
+from rag import watson_bp
 app.register_blueprint(watson_bp)
 from clustering import cluster_bp
 app.register_blueprint(cluster_bp)

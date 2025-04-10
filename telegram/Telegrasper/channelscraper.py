@@ -7,7 +7,7 @@ from pymongo import MongoClient
 
 from preprocess.extractor import argot_dictionary
 from server.cypher import run_cypher, Neo4j
-from server.db import DB, Database
+from server.db import Database
 from server.logger import logger
 from server.google import *
 

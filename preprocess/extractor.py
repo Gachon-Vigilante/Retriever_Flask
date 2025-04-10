@@ -3,7 +3,7 @@ import logging
 from bs4 import BeautifulSoup
 
 from server.logger import logger
-from server.db import DB
+from server.db import Database
 from typing import Optional, Union
 
 def extract_text_blocks_from_html(html) -> list[str]:
@@ -18,8 +18,8 @@ def extract_text_blocks_from_html(html) -> list[str]:
 import json
 
 # 데이터베이스에서 마약 은어/약어 로드(추후 데이터베이스에서 로드하도록 변경)
-argot_collection = DB.COLLECTION.ARGOT
-drugs_collection = DB.COLLECTION.DRUGS
+argot_collection = Database.Collection.ARGOT
+drugs_collection = Database.Collection.DRUGS
 argot_dictionary = dict()
 for argot in argot_collection.find():
     argot_dictionary[argot["name"]] = argot["drugId"]

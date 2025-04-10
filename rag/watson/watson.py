@@ -1,13 +1,11 @@
-from flask import Blueprint, request, jsonify
-from flask_cors import CORS
-from dotenv import load_dotenv
-load_dotenv()
-
 from server.logger import logger
-from .rag import BaseWatson, LangGraphMethods, VectorStoreMethods, chatbot_collection
 
-watson_bp = Blueprint("watson", __name__)
-CORS(watson_bp)  # CORS 활성화
+from .constants import chatbot_collection
+from .base import BaseWatson
+from .graph import LangGraphMethods
+from .mongodb import MongoDBMethods
+from .vectorstore import VectorStoreMethods
+
 
 class AutoCreateInstances(type):
     def __init__(cls, name, bases, dct):
@@ -18,5 +16,5 @@ class AutoCreateInstances(type):
 
         logger.info(f"데이터베이스에 있는 챗봇을 모두 로드했습니다. 로드된 챗봇: {list(cls._instances.keys())}")
 
-class Watson(BaseWatson, VectorStoreMethods, LangGraphMethods, metaclass=AutoCreateInstances):
+class Watson(BaseWatson, VectorStoreMethods, LangGraphMethods, MongoDBMethods, metaclass=AutoCreateInstances):
     pass
