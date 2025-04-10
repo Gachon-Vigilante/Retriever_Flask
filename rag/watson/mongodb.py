@@ -1,7 +1,7 @@
 import typing
 from datetime import datetime
 from server.logger import logger
-from .constants import chatbot_collection, checkpoints_collection, checkpoint_writes_collection
+from .constants import chatbot_collection
 
 if typing.TYPE_CHECKING:
     from . import Watson
@@ -19,7 +19,3 @@ class MongoDBMethods:
                                           }}, upsert=True) # upsert=True -> 없을 경우 신규 생성
         except Exception as e:
             logger.error(f"An error occurred while updating chatbot metadata at MongoDB: {e}")
-
-    def clear_memory(self: 'Watson'):
-        checkpoints_collection.delete_many({"thread_id": self.id})  # upsert=True -> 없을 경우 신규 생성
-        checkpoint_writes_collection.delete_many({"thread_id": self.id})  # upsert=True -> 없을 경우 신규 생성
