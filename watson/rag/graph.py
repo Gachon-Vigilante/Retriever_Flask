@@ -96,8 +96,8 @@ class LangGraphMethods:
         """
         # 데이터 모델 정의
         class Classification(BaseModel):
-            """A binary score for relevance checks"""
-            question_classification: str = Field(
+            """Classification result for user question."""
+            binary_classification: str = Field(
                 description="Response 'metadata' if the question is based on metadata, 'data' if it is based on data, 'history' if it is based on previous chat history between us."
             )
 
@@ -106,7 +106,7 @@ class LangGraphMethods:
 
         # 이진 분류를 요구하는 프롬프트 템플릿 정의
         prompt = PromptTemplate(
-            template="""You are a classifier assessing relevance of a user question. \n 
+            template="""You are a classifier responsible for categorizing user questions. \n 
                 The user asks you about chat data from messanger application.
                 Here is the user question: {question} \n
                 If it is necessary to use metadata to answer the question, classify it as 'metadata'.\n
@@ -346,7 +346,7 @@ class LangGraphMethods:
             )
 
         # LLM 모델 초기화 & 구조화된 출력을 위한 LLM 설정
-        llm_with_tool = ChatOpenAI(temperature=0, model=MODEL_NAME, streaming=True).with_structured_output(Grade)
+        llm_with_structured_output = ChatOpenAI(temperature=0, model=MODEL_NAME, streaming=True).with_structured_output(Grade)
 
         # 프롬프트 템플릿 정의
         prompt = PromptTemplate(
@@ -359,7 +359,7 @@ class LangGraphMethods:
         )
 
         # llm + tool 바인딩 체인 생성
-        chain = prompt | llm_with_tool
+        chain = prompt | llm_with_structured_output
 
         # 원래 질문과 현재 retriever로 검색한 context 문서 간의 관련성 평가 실행
         scored_result = chain.invoke({"question": state["question"], "context": state["context"]})
