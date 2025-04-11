@@ -10,11 +10,10 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from server.db import Database
-from server.logger import logger
+
 
 # MongoDB 연결
 collection = Database.Collection.POST
-cluster_collection = Database.Collection.POST_CLUSTERS
 
 # KoBERT 모델 불러오기
 model_name = "monologg/kobert"
@@ -62,7 +61,7 @@ def dbscan_clustering(embeddings, eps=0.4, min_samples=2):
 def perform_clustering_with_cosine(eps=0.4, min_samples=2):
     # 데이터 불러오기
     documents = list(collection.find({}, {
-        "_id": 1, "postId": 1, "html": 1, "createdAt": 1, "updatedAt": 1, "promoSiteLink": 1
+        "_id": 1, "postId": 1, "html": 1
     }))
 
     if not documents:
@@ -77,29 +76,19 @@ def perform_clustering_with_cosine(eps=0.4, min_samples=2):
     # 클러스터링
     labels = dbscan_clustering(embeddings, eps, min_samples)
 
-    # 이전 클러스터 데이터 삭제
-    cluster_collection.delete_many({})
-
-    # 클러스터 저장
+    # posts 컬렉션에 결과 업데이트
     for idx, doc in enumerate(documents):
-        promo_link = doc.get("promoSiteLink")
-        cluster_data = {
-            "postId": doc.get("postId"),
+        update_fields = {
             "cluster_label": int(labels[idx]),
-            "embedding": embeddings[idx],
-            "promoSiteLink": promo_link,
-            "promoSiteName": extract_domain(promo_link) if promo_link else None,
-            "channelId": extract_channel_id(promo_link) if promo_link else None,
-            "createdAt": doc.get("createdAt"),
-            "updatedAt": doc.get("updatedAt")
+            "embedding": embeddings[idx]
         }
-        cluster_collection.insert_one(cluster_data)
+        collection.update_one(
+            {"_id": doc["_id"]},
+            {"$set": update_fields}
+        )
 
-    # 통계 저장
-    cluster_collection.insert_one({
-        "_id": "cluster_stats",
+    return {
+        "message": "Clustering 결과가 posts 컬렉션에 저장되었습니다.",
         "total_documents": len(documents),
         "noise_documents": list(labels).count(-1)
-    })
-
-    return {"message": "Clustering + promo info 저장 완료!"}
+    }
