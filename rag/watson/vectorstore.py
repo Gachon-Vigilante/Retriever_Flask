@@ -1,20 +1,15 @@
-import os
-from os import PathLike
-from os.path import exists, join
 import typing
-from typing import Optional, Union
+from os.path import exists, join
 
+import faiss
 from bson import ObjectId
+from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.document_loaders import MongodbLoader
 from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-import faiss
 
 from server.db import get_mongo_connection_string, Database
 from server.logger import logger
-from utils import compare_dicts_sorted
 from .constants import vectorstore_dir, dimension_size
 
 if typing.TYPE_CHECKING:
@@ -77,26 +72,26 @@ class VectorStoreMethods:
             for doc in [self.vectorstore.docstore.search(doc_id)]
             if "_id" in doc.metadata
         }
+
         # MongoDB에는 있지만 vectorstore에는 반영되지 않은 _id 확인
         missing_chats = [oid for oid in self.chats if oid not in ids_in_vectorstore]
-
         # 새로 넣어야 할 문서의 id로 loader를 생성하고 문서 로드
         loader = self.build_loader(missing_chats)
         docs = loader.load()
+        if docs: # 문서 목록이 비어 있지 않을 때만 추가(비어 있을 경우 add_documents() 에서 오류 발생)
+            ##### 단계 2: 문서 분할(Split Documents) #####
+            logger.debug(
+                f"Splitting loaded chat documents from MongoDB. Channel IDs: {self.channels}, scope: {self.scope}")
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=50)
+            split_documents = text_splitter.split_documents(docs)
 
-        ##### 단계 2: 문서 분할(Split Documents) #####
-        logger.debug(
-            f"Splitting loaded chat documents from MongoDB. Channel IDs: {self.channels}, scope: {self.scope}")
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=50)
-        split_documents = text_splitter.split_documents(docs)
+            # 단계 3: 임베딩(Embedding) 생성
+            # 임베딩을 생성한다.
+            # embedding = OpenAIEmbeddings()  # -> self.embedding 으로 저장한다음 바로 참조하기 때문에 생략됨
 
-        # 단계 3: 임베딩(Embedding) 생성
-        # 임베딩을 생성한다.
-        # embedding = OpenAIEmbeddings()  # -> self.embedding 으로 저장한다음 바로 참조하기 때문에 생략됨
+            # 단계 4: DB 생성(Create DB) 및 저장
+            # 벡터스토어를 생성하고, 저장한다.
 
-        # 단계 4: DB 생성(Create DB) 및 저장
-        # 벡터스토어를 생성하고, 저장한다.
-        if split_documents: # 문서 목록이 비어 있지 않을 때만 추가(비어 있을 경우 add_documents() 에서 오류 발생)
             logger.debug(f"Adding documents to the vectorstore. Channel IDs: {self.channels}, scope: {self.scope}")
             self.vectorstore.add_documents(documents=split_documents)
             self.save_vectorstore()
@@ -113,9 +108,9 @@ class VectorStoreMethods:
             connection_string=get_mongo_connection_string(),
             db_name=Database.NAME,
             collection_name=Database.Collection.Channel.DATA.name,
-            filter_criteria={"_id": {"$in": ids}},  # 데이터베이스에서 조회할 기준 (쿼리)
+            filter_criteria={"_id": {"$in": ids}, "text": {"$ne": ""}},  # 데이터베이스에서 조회할 기준 (쿼리). 빈 텍스트가 아닌 채팅만 읽음. 빈 텍스트도 불러올 경우 벡터화 과정에서 오류 발생
             field_names=("text",),
-            metadata_names=("_id", "channelId", "id", "timestamp", "chats", "views", "url"),  # 메타데이터로 지정할 필드 목록
+            metadata_names=("_id", "channelId", "id", "timestamp", "views", "url"),  # 메타데이터로 지정할 필드 목록
         )
 
     def get_vectorstore_folder_path(self: 'Watson'):

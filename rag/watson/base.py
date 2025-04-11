@@ -17,8 +17,6 @@ from .constants import chatbot_collection, chat_collection, vectorstore_dir
 if typing.TYPE_CHECKING:
     from rag.watson import Watson
 
-from os.path import join, dirname, abspath
-
 class BaseWatson:
     _instances: dict[int, Union['BaseWatson', 'Watson']] = {}
     _lock: threading.Lock = threading.Lock()
@@ -26,7 +24,6 @@ class BaseWatson:
     GLOBAL: str = "global"
     MULTI: str = "multi"
     LOCAL: str = "local"
-    llm = ChatOpenAI(model_name="gpt-4o", temperature=0, streaming=True)  # 언어모델(LLM) 생성
     embedding = OpenAIEmbeddings()  # 임베딩(Embedding) 생성
 
     def __new__(cls, bot_id: int = None, channel_ids: list = None, scope: str = None):
@@ -109,9 +106,9 @@ class BaseWatson:
                 self.chats = []
                 for channel_id in channel_ids:
                     # 채팅 데이터 collection에서, 참고하려는 채널에서 송수신된 모든 채팅의 채팅 id를 채널 id로 나누어서 저장.
-                    # 이 때, scope가 "global"이라면 모든 채널 ID를 불러와서 저장.
+                    # 이 때, scope가 "global"이라면 모든 채널 ID를 불러와서 저장. 이 때 text가 있는 채팅들만 선택.
                     self.chats = [chat.get('_id') for chat in chat_collection.find(
-                        {} if self.scope == self.GLOBAL else {"channelId": channel_id}
+                        {"text": {"$ne": ""}} if self.scope == self.GLOBAL else {"channelId": channel_id, "text": {"$ne": ""}}
                     )]
                 logger.debug(f"새로운 챗봇을 생성했습니다. Chatbot ID: {self.id}")
 

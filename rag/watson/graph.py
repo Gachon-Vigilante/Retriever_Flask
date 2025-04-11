@@ -1,17 +1,14 @@
-import sqlite3
 import typing
 from typing import Any, Literal, Annotated, Sequence, TypedDict, Union, Optional
 
 from dotenv import load_dotenv
 from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage, BaseMessage, SystemMessage
+from langchain_core.messages import HumanMessage, BaseMessage
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import create_retriever_tool, Tool
-from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI
 from langchain_teddynote.models import get_model_name, LLMs
-from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.constants import END
 from langgraph.graph import StateGraph
 from langgraph.graph.message import add_messages
@@ -30,6 +27,7 @@ if typing.TYPE_CHECKING:
 
 # 최신 모델이름 가져오기
 MODEL_NAME = get_model_name(LLMs.GPT4o)
+LIGHT_MODEL_NAME = get_model_name(LLMs.GPT4o_MINI)
 
 DB_INFORMATION = """The MongoDB database contains information about Telegram channels and all chat messages sent and received within each channel.
 The database contains two collections: `"channel_info"` for storing channel information and `"channel_data"` for storing chat messages within channels. The schema for each collection is as follows:  
@@ -61,6 +59,7 @@ class GraphState(TypedDict):
     db_query: Annotated[Query, "Query"] # 데이터베이스 쿼리
     answer: Annotated[str, "Answer"]  # 답변
     debug: Annotated[bool, "Debug"]
+    type: Annotated[Literal["metadata", "data", "others"], "Type"]
 
 def update_state(state: GraphState, node_name:str, **updates) -> GraphState:
     """Graph의 State를 입력받고, 입력받은 State에서 **updates로 받은 딕셔너리를 반영해서 수정된 State를 반환하는 함수."""
@@ -76,7 +75,7 @@ def load_from_dict(data: dict, content_key: str, metadata_keys=None) -> Document
                     metadata={key: data[key] for key in data.keys() if key in metadata_keys})
 
 
-class LangGraphMethods():
+class LangGraphMethods:
     # Root Nodes
     @staticmethod
     def ask_question(state:GraphState) -> GraphState:
@@ -85,10 +84,11 @@ class LangGraphMethods():
         question = state["messages"][-1].content
         return update_state(state,
                             node_name="question",
-                            question=question,)
+                            question=question,
+                            type="others")
 
     @staticmethod
-    def classify_question(state:GraphState) -> Literal["metadata", "data", "history"]:
+    def classify_question(state:GraphState) -> Literal["metadata", "data", "others"]:
         """
             사용자의 초기 질문을 바탕으로 메타데이터 기반 질문인지, 데이터 기반 질문인지, 이전 답변 기반 질문인지를 AI가 판단해서
             이진 분류(Binary Classification)을 수행하는 함수.
@@ -97,20 +97,25 @@ class LangGraphMethods():
         # 데이터 모델 정의
         class Classification(BaseModel):
             """Classification result for user question."""
-            question_classification: str = Field(
-                description="Response 'metadata' if the question is based on metadata, 'data' if it is based on data, 'history' if it is based on previous chat history between us."
+            question_classification: Literal["metadata", "data", "others"] = Field(
+                description="""Response 'metadata' if the question is based on chat metadata(e.g. channel id, send time, views etc.), 
+                            'data' if it is based on chat data(e.g. drug type, sale place, price etc.),
+                            'others' if it is general question(e.g. greetings, questions based on previous chat history...)"""
             )
 
         # LLM 모델 초기화 -> 구조화된 출력을 위한 LLM 설정
-        llm_with_structured_output = ChatOpenAI(temperature=0, model=MODEL_NAME, streaming=True).with_structured_output(Classification)
+        llm_with_structured_output = ChatOpenAI(temperature=0, model=LIGHT_MODEL_NAME, streaming=True).with_structured_output(Classification)
 
-        # 이진 분류를 요구하는 프롬프트 템플릿 정의
+        # 분류를 요구하는 프롬프트 템플릿 정의
         prompt = PromptTemplate(
             template="""You are a classifier responsible for categorizing user questions. \n 
                 The user asks you about chat data from messanger application.
                 Here is the user question: {question} \n
                 If it is necessary to use metadata to answer the question, classify it as 'metadata'.\n
-                Give a binary classification 'metadata' or 'data' to indicate whether the document is based on metadata or data.""",
+                Give a classification 'metadata', 'data' or 'others' to indicate whether the document is based on.
+                Response 'metadata' if the question is based on chat metadata(e.g. channel id, send time, views etc.), 
+                'data' if it is based on chat data(e.g. drug type, sale place, price etc.),
+                'others' if it is general question(e.g. greetings, questions based on previous chat history...)""",
             input_variables=["question"],
         )
 
@@ -129,14 +134,14 @@ class LangGraphMethods():
                 print("\n==== [DECISION: METADATA RELEVANT] ====\n")
             return "metadata"
 
-        elif classification_result.question_classification == "history":
-            if state.get("debug"):
-                print("\n==== [DECISION: HISTORY RELEVANT] ====\n")
-            return "history"
-        else:
+        elif classification_result.question_classification == "data":
             if state.get("debug"):
                 print("\n==== [DECISION: DATA RELEVANT] ====\n")
             return "data"
+        else:
+            if state.get("debug"):
+                print("\n==== [DECISION: GENERAL QUESTION RELEVANT] ====\n")
+            return "others"
 
 
     # 메타데이터 기반 질문에 대응하는 Graph Branch
@@ -149,7 +154,6 @@ class LangGraphMethods():
 
         # SQL Query 프롬프트 템플릿 정의. 기본적으로 PromptTemplate에서 {}는 사용자 입력으로 인식되기 때문에, {{}}로 escape해야 한다.
         system_message = """You are a MongoDB manager responsible for answering user questions. 
-        
             # Database Information: 
             {database_information}
             
@@ -196,100 +200,7 @@ class LangGraphMethods():
         # 데이터베이스 쿼리 받기
         query = chain.invoke({"database_information": DB_INFORMATION, "question": question})
 
-        return update_state(state, node_name="generate_db_query", db_query=query)
-
-    @staticmethod
-    def validate_db_query(state:GraphState) -> GraphState:
-        if state.get("debug"):
-            print("\n=== NODE: validate db query ===\n")
-        return update_state(state, node_name="validate_db_query")
-
-    @staticmethod
-    def evaluate_db_query(state:GraphState) -> Literal["rewrite_query", "end"]:
-        if state.get("debug"):
-            print("\n=== BRANCH: evaluate db query ===\n")
-        class NextAction(BaseModel):
-            """A binary score for relevance checks"""
-            next_action: str = Field(
-                description="Response 'end' if the collection and pipeline is correctly formatted or 'rewrite_query' if it is not."
-            )
-            reason: str = Field(
-                description="The reason why you chose the next action."
-            )
-        # LLM 모델 초기화 -> 구조화된 출력을 위한 설정
-        llm_with_structured_output = ChatOpenAI(temperature=0, model=MODEL_NAME, streaming=True).with_structured_output(NextAction)
-
-        # SQL Query 프롬프트 템플릿 정의. 기본적으로 PromptTemplate에서 {}는 사용자 입력으로 인식되기 때문에, {{}}로 escape해야 한다.
-        system_message = """You are an evaluator responsible for assessing whether the generated MongoDB query is appropriate for the given user question.
-            # Database Information: 
-            {database_information}
-            
-            # Your Primary Mission:
-            Based on the provided channel information, evaluate whether the JSON adheres to the following criteria:
-            
-            1. The top-level keys in the JSON must be exactly two: "collection", which specifies the collection to query, and "pipeline", which represents the aggregation pipeline.
-            2. The value of the "collection" key must be either "channel_info" or "channel_data".
-            3. The value of the "pipeline" key must be an array containing a valid aggregation pipeline that correctly retrieves the requested data.
-            4. If the user question is asked without specifying a channel ID or any identifying information for a channel, assume that the data should be retrieved from all channels by default.
-            5. The response must contain only string and JSON, without any Markdown formatting or other non-JSON text. 
-            6. The aggregation pipeline should be directly convertible to JSON.
-            
-            If the JSON is correctly formatted, return "end".
-            If there is an issue, such as selecting the wrong collection, constructing an incorrect query, or violating any of the above requirements, return "rewrite_query".
-    
-            # Example:
-            For example, if a user asks:
-            "Show me the most viewed chat message in the channels after January 1, 2025."
-            and JSON is:
-            
-            collection: channel_data
-            pipeline: ```json
-            [
-              {{
-                "$match": {{
-                  "timestamp": {{ "$gte": ISODate("2025-01-01T00:00:00Z") }}
-                }}
-              }},
-              {{ "$sort": {{ "views": -1 }} }},
-              {{ "$limit": 1 }}
-            ]
-            ```
-            In this case, even if all other conditions are met, the presence of unnecessary Markdown formatting strings like json makes it impossible to directly convert the response to JSON. Therefore, the correct answer of this case is "rewrite_query".
-            """
-
-        prompts = ChatPromptTemplate.from_messages([
-            ("system", system_message),
-            ("user", """
-            # User Question:
-            {question}
-            
-            # collection:
-            {collection}
-            # pipeline:
-            {pipeline}
-            """),
-        ])
-
-        # prompt + llm 바인딩 체인 생성
-        chain = prompts | llm_with_structured_output
-
-        # 데이터베이스 쿼리 받기
-        answer = chain.invoke({
-            "database_information": DB_INFORMATION,
-            "question": state["question"],
-            "collection": state["db_query"].collection,
-            "pipeline": state["db_query"].pipeline,
-        })
-
-        if answer.next_action == "end":
-            return "end"
-        return "rewrite_query"
-
-    @staticmethod
-    def rewrite_db_query(state:GraphState) -> GraphState:
-        if state.get("debug"):
-            print("\n=== NODE: rewrite db query ===\n")
-        return update_state(state, node_name="rewrite_db_query")
+        return update_state(state, node_name="generate_db_query", db_query=query, type="metadata")
 
     @staticmethod
     def execute_db_query(state:GraphState) -> GraphState:
@@ -311,7 +222,7 @@ class LangGraphMethods():
         question = state["messages"][-1].content
 
         # LLM 모델 초기화
-        model = ChatOpenAI(temperature=0, streaming=True, model=MODEL_NAME)
+        model = ChatOpenAI(temperature=0, streaming=True, model=LIGHT_MODEL_NAME)
 
         # retriever tool 바인딩 & 도구를 호출하는 것을 강제
         model = model.bind_tools([retriever_tool], tool_choice=retriever_tool.name)
@@ -319,90 +230,8 @@ class LangGraphMethods():
         # 에이전트 응답 생성
         response = model.invoke(question)
 
-        return update_state(state, node_name="execute_retriever", messages=[response])
+        return update_state(state, node_name="execute_retriever", messages=[response], type="data")
 
-    @staticmethod
-    def validate_retrieved_context(state:GraphState) -> GraphState:
-        if state.get("debug"):
-            print("\n=== NODE: validate retrieved context ===\n")
-        # 가장 마지막 메시지 추출 (가장 마지막 메세지가 retrieve ToolNode가 생성한 ToolMessage) -> 검색된 문서 추출
-        retrieved_docs = state["messages"][-1].content
-        return update_state(state, node_name="validate_retrieved_context", context=retrieved_docs)
-
-    @staticmethod
-    def evaluate_retrieved_context(state:GraphState) -> Literal["generate", "rewrite_question"]:
-        if state.get("debug"):
-            print("\n=== BRANCH: evaluate retrieved context ===\n")
-
-        # 데이터 모델 정의
-        class Grade(BaseModel):
-            """A binary score for relevance checks"""
-
-            binary_score: str = Field(
-                description="Response 'yes' if the document is relevant to the question or 'no' if it is not."
-            )
-            reason: str = Field(
-                description="The reason why you graded this document as your decision."
-            )
-
-        # LLM 모델 초기화 & 구조화된 출력을 위한 LLM 설정
-        llm_with_structured_output = ChatOpenAI(temperature=0, model=MODEL_NAME, streaming=True).with_structured_output(Grade)
-
-        # 프롬프트 템플릿 정의
-        prompt = PromptTemplate(
-            template="""You are a grader assessing relevance of a retrieved document to a user question. \n 
-            Here is the retrieved document: \n\n {context} \n\n
-            Here is the user question: {question} \n
-            If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
-            Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question.""",
-            input_variables=["context", "question"],
-        )
-
-        # llm + tool 바인딩 체인 생성
-        chain = prompt | llm_with_structured_output
-
-        # 원래 질문과 현재 retriever로 검색한 context 문서 간의 관련성 평가 실행
-        scored_result = chain.invoke({"question": state["question"], "context": state["context"]})
-
-        # 관련성 여부 추출
-        score = scored_result.binary_score
-
-        # 관련성 여부에 따른 결정
-        if score == "yes":
-            if state.get("debug"):
-                print("==== [DECISION: DOCS RELEVANT] ====")
-            return "generate"
-
-        else:
-            if state.get("debug"):
-                print("==== [DECISION: DOCS NOT RELEVANT] ====")
-            return "rewrite_question"
-
-    @staticmethod
-    def rewrite_question(state:GraphState) -> GraphState:
-        if state.get("debug"):
-            print("\n=== NODE: rewrite question ===\n")
-        # 원래 질문 추출
-        question = state["question"]
-
-        # 질문 개선을 위한 프롬프트 구성
-        msg = [
-            HumanMessage(
-                content=f""" \n 
-            Look at the input and try to reason about the underlying semantic intent / meaning. \n 
-            Here is the initial question:
-            \n ------- \n
-            {question} 
-            \n ------- \n
-            Formulate an improved question: """,
-            )
-        ]
-
-        # LLM 모델로 질문 개선
-        model = ChatOpenAI(temperature=0, model=MODEL_NAME, streaming=True)
-        # Query-Transform 체인 실행
-        response = model.invoke(msg)
-        return update_state(state, node_name="rewrite_question", messages=[response])
 
     @staticmethod
     def handle_error(state:GraphState) -> GraphState:
@@ -453,25 +282,31 @@ class LangGraphMethods():
             ###
             
             # Here is the CONTEXT that you should use to answer the question:
-            {context}"""
-        # 기존 state["messages"]에 새로운 지시와 질문을 더해서 같이 제공한다.
-        # memory를 설정하면 state["messages"]에 계속해서 대화 기록이 저장되기 때문에,
-        # 이를 AI가 받아서 이전 채팅 기록에 근거한 답변을 생성할 수 있게 된다.
-        prompt = ChatPromptTemplate.from_messages([
-            *state["messages"],
-            ("system", indication),
-            ("human", "{question}"),
-        ])
+            {context}
+        """
 
-        # RAG 체인 구성.
-        # StrOutParser()를 사용하면 결과가 문자열이 되어서 state["messages"]에 추가될 때 자동으로 HumanMessage로 타입이 변환되기 때문에,
-        # Memory에 저장 후 AI에게 제공해도 AI가 이를 AI의 응답으로 인식하지 못한다.
-        # 따라서 StrOutputParser는 사용하지 말자.
-        rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
+        if state.get("type") != "others":
+            # 기존 state["messages"]에 새로운 지시와 질문을 더해서 같이 제공한다.
+            # memory를 설정하면 state["messages"]에 계속해서 대화 기록이 저장되기 때문에,
+            # 이를 AI가 받아서 이전 채팅 기록에 근거한 답변을 생성할 수 있게 된다.
+            prompt = ChatPromptTemplate.from_messages([
+                *state["messages"],
+                ("system", indication),
+                ("human", "{question}"),
+            ])
 
-        # 답변 생성
-        response = rag_chain.invoke({"context": state.get("context", ""),
-                                     "question": state.get("question", ""),})
+            # RAG 체인 구성.
+            # StrOutParser()를 사용하면 결과가 문자열이 되어서 state["messages"]에 추가될 때 자동으로 HumanMessage로 타입이 변환되기 때문에,
+            # Memory에 저장 후 AI에게 제공해도 AI가 이를 AI의 응답으로 인식하지 못한다.
+            # 따라서 StrOutputParser는 사용하지 말자.
+            rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
+
+            # 답변 생성
+            response = rag_chain.invoke({"context": state.get("context", ""), "question": state.get("question", ""),})
+        else:
+            llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
+            # 답변 생성
+            response = llm.invoke(state["messages"])
 
         return update_state(state, node_name="generate", messages=[response], context="") # 이전 질문에서 얻어낸 context가 다음 historical 질문에 영향을 주지 않도록 context 초기화
 
@@ -496,13 +331,9 @@ class LangGraphMethods():
 
         workflow.add_node("ask_question", self.ask_question)
         workflow.add_node("generate_db_query", self.generate_db_query)
-        workflow.add_node("validate_db_query", self.validate_db_query)
-        workflow.add_node("rewrite_db_query", self.rewrite_db_query)
         workflow.add_node("execute_db_query", self.execute_db_query)
         workflow.add_node("execute_retriever", lambda state: self.execute_retriever(state, retriever_tool))
         workflow.add_node("retrieve", retriever_tool_node)
-        workflow.add_node("validate_retrieved_context", self.validate_retrieved_context)
-        workflow.add_node("rewrite_question", self.rewrite_question)
         workflow.add_node("generate", self.generate)
         # workflow.add_node("handle_error", handle_error)
 
@@ -521,30 +352,12 @@ class LangGraphMethods():
         )
 
         # 메타데이터 기반일 경우 Branch
-        workflow.add_edge("generate_db_query", "validate_db_query")
-        workflow.add_conditional_edges(
-            "validate_db_query",
-            self.evaluate_db_query,
-            {
-                "rewrite_query": "rewrite_db_query",
-                "end": "execute_db_query",
-            }
-        )
-        workflow.add_edge("rewrite_db_query", "validate_db_query")
+        workflow.add_edge("generate_db_query", "execute_db_query")
         workflow.add_edge("execute_db_query", "generate")
 
         # 데이터 기반일 경우의 Branch
         workflow.add_edge("execute_retriever", "retrieve")
-        workflow.add_edge("retrieve", "validate_retrieved_context")
-        workflow.add_conditional_edges(
-            "validate_retrieved_context",
-            self.evaluate_retrieved_context,
-            {
-                "rewrite_question": "rewrite_question",
-                "generate": "generate",
-            }
-        )
-        workflow.add_edge("rewrite_question", "execute_retriever")
+        workflow.add_edge("retrieve", "generate")
 
         # 그래프 종료
         workflow.add_edge("generate", END)
@@ -568,7 +381,7 @@ class LangGraphMethods():
         }
 
         # config 설정(재귀 최대 횟수, thread_id)
-        config = RunnableConfig(recursion_limit=15, configurable={"thread_id": self.id})
+        config = RunnableConfig(recursion_limit=10, configurable={"thread_id": self.id})
 
         # 그래프를 스트리밍하려면:
         # stream_graph(self.graph, inputs, config, list(self.graph.nodes.keys()))
@@ -591,8 +404,3 @@ class LangGraphMethods():
             return answer
         else:
             return self.error_msg_for_empty_data
-
-
-    def get_snapshot(self: 'Watson'):
-        # 그래프 상태 스냅샷 생성해서 반환
-        return self.graph.get_state(config=RunnableConfig(configurable={"thread_id": self.id}))
