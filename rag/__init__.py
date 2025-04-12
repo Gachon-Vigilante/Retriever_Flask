@@ -25,7 +25,7 @@ def chat_with_watson():
     if data['action'] == "ask":
         return ask_watson(bot, data)
     elif data['action'] == "reset":
-        bot.clear_message_history()
+        bot.clear_memory()
         return jsonify({"success": True}), 200
 
 
