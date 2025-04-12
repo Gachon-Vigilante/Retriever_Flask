@@ -1,18 +1,15 @@
-import os
 import threading
 import typing
-from datetime import datetime
-from os import PathLike
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from bson import ObjectId
 from langchain_core.vectorstores import VST
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langgraph.graph.state import CompiledStateGraph
 
 from server.logger import logger
 from utils import generate_integer_id64
-from .constants import chatbot_collection, chat_collection, vectorstore_dir
+from .constants import chatbot_collection, chat_collection
 
 if typing.TYPE_CHECKING:
     from rag.watson import Watson
