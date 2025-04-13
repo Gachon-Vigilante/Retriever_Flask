@@ -1,8 +1,7 @@
 from flask import Blueprint, request, jsonify
-from . import post, post_similarity
 from .channel import calculate_and_store_channel_similarity
-from .drug_stat import drug_time, drug_type
-from .post import dbscan_clustering, collection, perform_clustering_with_cosine
+from .channel_come_in import calculate_similarity_for_new_channels
+from .post import perform_clustering_with_cosine
 from .post_similarity import post_similarity
 # Blueprint 설정
 cluster_bp = Blueprint('cluster', __name__, url_prefix='/cluster')
@@ -40,13 +39,9 @@ def calculate_similarity():
     result = calculate_and_store_channel_similarity()
     return jsonify(result), 200
 
-@cluster_bp.route('/drug-type', methods=['GET'])
-def drug_usage_by_type():
-    data = drug_type()
-    return jsonify(data)
+# '/channel_come_in.py' 엔드포인트
+@cluster_bp.route('/channel_update', methods=['POST'])
+def update_new_channel():
+    result = calculate_similarity_for_new_channels()
+    return jsonify(result), 200
 
-@cluster_bp.route('/drug-time', methods=['GET'])
-def drug_usage_over_time():
-    period = request.args.get('period', 'monthly')  # 'weekly' or 'monthly'
-    data = drug_time(period=period)
-    return jsonify(data)
