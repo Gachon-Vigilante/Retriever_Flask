@@ -80,7 +80,7 @@ class ChannelContentMethods:
 
         else:
             msg = (f"Archived all chats for the channel(Channel key: {channel_key}) in MongoDB - "
-                   f"DB: {DB.NAME}, collection: {DB.COLLECTION.CHANNEL.DATA}, channel ID: {entity.id}")
+                   f"DB: {Database.NAME}, collection: {Database.Collection.Channel.DATA}, channel ID: {entity.id}")
             logger.info(msg)
             return {"status": "success",
                     "message": msg}
@@ -100,8 +100,8 @@ class ChannelContentMethods:
 async def process_message(entity, client, message) -> None:
     chat_collection = Database.Collection.Channel.DATA  # 채팅 컬렉션 선택
     channel_collection = Database.Collection.Channel.INFO
-    argot_collection = DB.COLLECTION.ARGOT # 은어 컬렉션 선택
-    drugs_collection = DB.COLLECTION.DRUGS # 마약류 컬렉션 선택
+    argot_collection = Database.Collection.ARGOT # 은어 컬렉션 선택
+    drugs_collection = Database.Collection.DRUGS # 마약류 컬렉션 선택
 
     argot_list, drugs_list, argot_names = [], [], []
     # 은어가 메세지에서 발견될 경우 발견된 은어들과 그 은어에 대응하는 마약류를 리스트로 생성

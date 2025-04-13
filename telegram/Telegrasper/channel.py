@@ -15,7 +15,7 @@ class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
     def get_channel_info(self:'TelegramManager',
                          channel_key:typing.Union[int, str],
                          ) -> dict:
-        collection = Database.COLLECTION.CHANNEL.INFO  # 컬렉션 선택
+        collection = Database.Collection.Channel.INFO  # 컬렉션 선택
         entity = asyncio.run_coroutine_threadsafe(self.connect_channel(channel_key), self.loop).result()
 
         channel_info = {

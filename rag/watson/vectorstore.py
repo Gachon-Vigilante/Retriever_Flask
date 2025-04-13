@@ -29,7 +29,7 @@ class VectorStoreMethods:
         else:
             local_vectorstore: FAISS = FAISS(
                 embedding_function=self.embedding,
-                index=faiss.IndexFlatL2(dimension_size),
+                index=faiss.IndexFlatL2(dimension_size), # IndexFlatL2는 정확도가 높고 속도가 느려, 작은 데이터셋에 적합한 인덱싱 함수.
                 docstore=InMemoryDocstore(),
                 index_to_docstore_id={}
             )
