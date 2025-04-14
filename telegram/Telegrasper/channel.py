@@ -15,8 +15,11 @@ class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
     def get_channel_info(self:'TelegramManager',
                          channel_key:typing.Union[int, str],
                          ) -> dict:
-        collection = Database.COLLECTION.CHANNEL.INFO  # 컬렉션 선택
+        collection = Database.Collection.Channel.INFO  # 컬렉션 선택
         entity = asyncio.run_coroutine_threadsafe(self.connect_channel(channel_key), self.loop).result()
+
+        if not entity:
+            return {}
 
         channel_info = {
             "_id": entity.id,
@@ -30,7 +33,7 @@ class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
         try:
             collection.insert_one(channel_info.copy())  # 데이터 삽입. copy()를 하지 않으면 mongoClient가 channel_info 원본 딕셔너리에 ObjectId를 삽입함.
         except DuplicateKeyError:
-            logger.warning(f"Tried to archive a channel which is already archived. Channel ID: {entity.id}, title: {entity.title}")
+            logger.warning(f"Tried to archive a channel which is already archived. Channel ID: {entity.id}, title: {entity.title}, ")
             # collection.update_one({"_id": entity.id},
             #                       channel_info.copy()) # <- 아카이브 정책을 어떻게 할지 고민해 봐야 함.
         except Exception as exception:

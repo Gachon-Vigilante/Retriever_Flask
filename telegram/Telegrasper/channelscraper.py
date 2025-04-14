@@ -66,6 +66,9 @@ class ChannelContentMethods:
             create_folder(default_bucket_name, entity.id)
 
             async for message in self.client.iter_messages(entity):
+                if post_count > 500: # 채널 채팅 수 최대 500개 수집으로 제한.
+                    break
+
                 post_count += 1
                 if post_count % 10 == 0:
                     logger.info(f"{post_count} Posts is scraped from {channel_key}")
@@ -80,7 +83,7 @@ class ChannelContentMethods:
 
         else:
             msg = (f"Archived all chats for the channel(Channel key: {channel_key}) in MongoDB - "
-                   f"DB: {DB.NAME}, collection: {DB.COLLECTION.CHANNEL.DATA}, channel ID: {entity.id}")
+                   f"DB: {Database.NAME}, collection: {Database.Collection.Channel.DATA}, channel ID: {entity.id}")
             logger.info(msg)
             return {"status": "success",
                     "message": msg}
@@ -100,8 +103,8 @@ class ChannelContentMethods:
 async def process_message(entity, client, message) -> None:
     chat_collection = Database.Collection.Channel.DATA  # 채팅 컬렉션 선택
     channel_collection = Database.Collection.Channel.INFO
-    argot_collection = DB.COLLECTION.ARGOT # 은어 컬렉션 선택
-    drugs_collection = DB.COLLECTION.DRUGS # 마약류 컬렉션 선택
+    argot_collection = Database.Collection.ARGOT # 은어 컬렉션 선택
+    drugs_collection = Database.Collection.DRUGS # 마약류 컬렉션 선택
 
     argot_list, drugs_list, argot_names = [], [], []
     # 은어가 메세지에서 발견될 경우 발견된 은어들과 그 은어에 대응하는 마약류를 리스트로 생성
@@ -154,9 +157,10 @@ async def process_message(entity, client, message) -> None:
     # channelId 필드와 id 필드를 기준으로 이미 채팅이 수집되었는지 검사한 후, 아직 수집되지 않았을 경우에만 삽입
     if not chat_collection.find_one({"channelId": entity.id, "id": message.id}):
         # GCS 버킷에 이미 해당 채팅의 파일이 존재하는지 검사하고, 존재하지 않을 경우에만 미디어를 다운로드해서 버킷에 저장
-        if not gcs_file_exists(bucket_name=default_bucket_name,
-                           folder_name=entity.id,
-                           file_name=message.id):
+        media_info = check_gcs_object_and_get_info(bucket_name=default_bucket_name,
+                                                   folder_name=entity.id,
+                                                   file_name=message.id)
+        if not media_info:
             media_data, media_type = await download_media(message, client)
             if media_data:
                 try:
@@ -177,7 +181,7 @@ async def process_message(entity, client, message) -> None:
                 media = None
         else:
             logger.warning("GCS 버킷에 이미 해당 채팅의 미디어가 저장되어 있습니다. 미디어 저장을 건너뜁니다.")
-            media = None
+            media = media_info
 
         post_data = {
             "channelId": entity.id,
