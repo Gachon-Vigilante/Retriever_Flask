@@ -5,6 +5,7 @@ from pymongo.errors import DuplicateKeyError
 
 from server.db import Database
 from server.logger import logger
+from server.cypher import run_cypher, Neo4j
 from .channelscraper import ChannelContentMethods
 from .monitor import ChannelContentMonitorMethods
 
@@ -30,6 +31,21 @@ class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
             "discoveredAt": datetime.datetime.now(), # 채널이 처음으로 발견된 일시
             "status": "active" if self.check(channel_key) else "inactive",
         }
+
+        ##### Neo4j #####
+        if channel_info["status"] == "active":
+            # 채널 노드가 데이터베이스에 없을 경우 추가
+            summary = run_cypher(query=Neo4j.QueryTemplate.Node.Channel.MERGE,
+                                 parameters={
+                                     "id": channel_info["_id"],
+                                     "title": channel_info["title"],
+                                     "username": channel_info["username"],
+                                     "status": channel_info["status"],
+                                 }).consume()
+            if summary.counters.nodes_created > 0:
+                logger.info(f"새로운 마약 판매 채널이 발견되어 Neo4j 데이터베이스에 추가되었습니다. 발견된 채널의 ID: {entity.id}, 제목: `{entity.title}`")
+
+        ##### MongoDB #####
         try:
             collection.insert_one(channel_info.copy())  # 데이터 삽입. copy()를 하지 않으면 mongoClient가 channel_info 원본 딕셔너리에 ObjectId를 삽입함.
         except DuplicateKeyError:
