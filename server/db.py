@@ -25,7 +25,6 @@ class Database:
             INFO: Collection = db_object["channel_info"]
             DATA: Collection = db_object["channel_data"]
             SIMILARITY: Collection = db_object["channel_similarity"]
-        CHANNEL: Collection = Channel
         DRUGS: Collection = db_object["drugs"]
         ARGOT: Collection = db_object["argot"]
         CHATBOT: Collection = db_object["chat_bot"]

@@ -65,3 +65,8 @@ def is_channel_empty(channel_id) -> bool:
     chat_collection = Database.Collection.Channel.DATA
     # 채널 ID를 기준으로 모든 채팅을 찾아서 각 채팅의 채팅 ID를 리스트로 생성
     return False if chat_collection.find_one({"channelId": channel_id}) else True
+
+def get_all_active_channels() -> list[int]:
+    """현재 status: active인 모든 채널의 ID를 불러오는 함수."""
+    channel_collection = Database.Collection.Channel.INFO
+    return [channel_info["_id"] for channel_info in channel_collection.find({"status": "active"})]
