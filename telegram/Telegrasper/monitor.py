@@ -1,6 +1,7 @@
 import asyncio
 import typing
 from telethon import events
+from telethon.errors import ChatForwardsRestrictedError
 
 from .channelscraper import process_message
 from .utils import *
@@ -36,7 +37,18 @@ class ChannelContentMonitorMethods:
                 await process_message(chat, self.client, message)
                 sender = extract_sender_info(sender)
                 # 메세지를 나에게 포워딩
-                await self.client.forward_messages(self.my_user_id, event.message)
+                try:
+                    await self.client.forward_messages(self.my_user_id, event.message)
+                except ChatForwardsRestrictedError:
+                    logger.warning("This chat has message forwarding restricted.")
+                    if message.text:
+                        await self.client.send_message(self.my_user_id, message.text)
+                    if message.media:
+                        await self.client.send_file(self.my_user_id, message.media)
+                    if not message.text and not message.media:
+                        await self.client.send_message(self.my_user_id, "[Unsupported message type]")
+
+
                 logger.info(
                     f"Target(ID: {sender.get('id')}, name: {sender.get('name')}) spoke. time: {message.date.strftime('%Y-%m-%d %H:%M:%S')}")
     

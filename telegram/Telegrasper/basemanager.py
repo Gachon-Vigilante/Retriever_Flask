@@ -74,6 +74,7 @@ class TelegramBaseManager:
                 self.loop = background_loop
                 background_loop.run_until_complete(self.start_client())
                 self.my_user_id = background_loop.run_until_complete(self.get_me())
+                super().__init__()
             else:
                 # 만약 현재 실행 흐름이 백그라운드 스레드가 아닐 경우(메인 스레드일 경우), 기존 값이 있으면 그대로 두고 없으면 None으로 초기화한다.
                 self.client = getattr(self, "client", None)
