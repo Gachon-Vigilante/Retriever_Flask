@@ -1,16 +1,12 @@
 import asyncio
-import re
-import typing
 import os
+import typing
 
-from pymongo import MongoClient
-
-from preprocess.extractor import argot_dictionary
+from ai.telegram import check_telegram_by_openai
 from server.cypher import run_cypher, Neo4j
 from server.db import Database
-from server.logger import logger
 from server.google import *
-
+from server.logger import logger
 from .utils import download_media, extract_sender_info, get_url_from_message
 
 default_bucket_name = os.environ.get('GCS_BUCKET_NAME')
@@ -19,35 +15,35 @@ if typing.TYPE_CHECKING:
     from .manager import TelegramManager
 
 class ChannelContentMethods:
-    async def check_channel_content(self:'TelegramManager', channel_key:typing.Union[int, str]) -> bool:
+    async def check_channel_content(self:'TelegramManager', channel) -> bool:
         """채널의 데이터를 일부 수집해서, 마약 관련 채널로 강력히 의심되는지 확인하는 검문 메서드."""
         try:
-            logger.debug(f"Connecting to channel: {channel_key}")
-            entity = await self.connect_channel(channel_key)
-            if entity is None:
-                logger.warning("Failed to connect to the channel.")
-                return False
+            if isinstance(channel, (int, str)): # channel key의 형태로 입력되었을 경우, 채널에 연결하고 entity 반환 필요
+                entity = await self.connect_channel(channel)
+                if entity is None:
+                    logger.debug(f"텔레그램 채널 검문 결과: False, 사유: 채널에 연결 불가능. Channel ID, @username or invite link: {channel}")
+                    return False
+            else:
+                entity = channel # channel entity 객체로 입력되었을 경우 그대로 사용
 
             # 메시지 확인
-            post_count = 0
-            suspicious_count = 0
+            merged_message:str = ""
+            chat_num = 1
             async for post in self.client.iter_messages(entity):
-                post_count += 1
+                if chat_num > 10:
+                    break # 최대 10개의 채팅만 수집
                 if post.text:
-                    # 메세지에서 은어가 총 3개 이상 발견되면 활성 채널로 분류
-                    suspicious_count += sum([len(re.findall(re.escape(keyword), post.text)) for keyword in argot_dictionary])
-                    if suspicious_count >= 3:
-                        return True
-                    # 100개 이내의 채팅에 은어가 3개 이상 없을 경우 탐색을 종료하고 비활성 채널로 분류
-                    if post_count > 100:
-                        return False
+                    merged_message += f"chat #{chat_num}: {post.text}\n"
+                    chat_num += 1
 
+            result = check_telegram_by_openai(merged_message)
+            logger.debug(f"텔레그램 채널 검문 결과: {result}, 채널 ID: {entity.id}, 채널 Title: {entity.title}, 사유: OpenAI의 판정")
+            return result
 
         except Exception as e:
             logger.error(f"An error occurred in check_channel_content(): {e}")
+            logger.debug(f"텔레그램 채널 검문 결과: False, 사유: 오류 발생")
             return False
-
-        return False
 
 
     # 채널 내의 데이터를 스크랩하는 함수

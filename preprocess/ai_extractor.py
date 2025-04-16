@@ -1,11 +1,11 @@
-from langchain_core.prompts import PromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, \
+from langchain_core.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, \
     ChatPromptTemplate
-from langchain_teddynote.models import get_model_name, LLMs
-from pydantic import BaseModel, Field, Json
 from langchain_openai import ChatOpenAI
+from langchain_teddynote.models import get_model_name, LLMs
+from pydantic import BaseModel, Field
 
-from server.logger import logger
 from preprocess.extractor import extract_text_blocks_from_html
+from server.logger import logger
 
 MODEL_NAME = get_model_name(LLMs.GPT4o_MINI)
 
@@ -41,9 +41,9 @@ def extract_promotion_by_openai(html: str) -> dict[str, str]:
 
 You are given blocks of text extracted from web pages. These may contain user-submitted content or embedded messages. Your job is to detect if **any part of the text** explicitly promotes the sale of illegal drugs.
 
-The following slang terms are commonly used to refer to illegal drugs. These terms should be interpreted as possible indicators of drug-related content, especially when they appear in a commercial context (e.g., with words like "for sale", "selling", "buy", "sample", etc.):
+The following argot terms are commonly used to refer to illegal drugs. These terms should be interpreted as possible indicators of drug-related content, especially when they appear in a commercial context (e.g., with words like "for sale", "selling", "buy", "sample", etc.):
 
-### **Drug-related slang examples:**
+### **Drug-related argot examples:**
 - 떨, 위드, 허브, 해쉬, 브액, 대마초, 대마, 고기 (refers to marijuana)
 - 아이스, 크리스탈, 술, 히로뽕, 필로폰, 작대기, 빙두 (refers to methamphetamine)
 - 몰리, 엑시, 엑스터시, 도리도리, 캔디, XTC (refers to MDMA or ecstasy)
