@@ -5,7 +5,6 @@ from telethon.errors import ChatForwardsRestrictedError
 
 from .channelscraper import process_message
 from .utils import *
-from server.db import Database
 from server.logger import logger
 
 if typing.TYPE_CHECKING:
