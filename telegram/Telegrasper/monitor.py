@@ -1,8 +1,10 @@
 import asyncio
 import typing
 from telethon import events
+from telethon.errors import ChatForwardsRestrictedError
+
+from .channelscraper import process_message
 from .utils import *
-from server.db import get_mongo_client, DB
 from server.logger import logger
 
 if typing.TYPE_CHECKING:
@@ -27,48 +29,27 @@ class ChannelContentMonitorMethods:
         # 새로운 이벤트 핸들러 정의 (채널별로 별도 핸들러를 생성하기 위해, 함수 내에서 동적으로 선언)
         async def event_handler(event):
             """ 메세지가 발생하면 반응하기 위한 핸들러의 비동기 함수 """
-            # MongoDB client 생성
-            mongo_client, collection_name = get_mongo_client(), DB.COLLECTION.CHANNEL.DATA
-            collection = mongo_client[DB.NAME][collection_name]  # 컬렉션 선택
-    
             chat = await event.get_chat()
             # 이벤트가 채팅방 이벤트이고, 메세지가 있고, 해당 메세지가 아직 수집되지 않은 것일 때에만
             if chat and event.message:
                 message, sender = event.message, await event.get_sender()
-                message_text = message.message  # 메시지 텍스트 가져오기
-                if not collection.find_one({"channelId": chat.id, "id": message.id}):
-                    new_data = None
-                    try:
-                        # 삽입할 채팅 데이터 정의
-                        new_data = {
-                            "channelId": chat.id,
-                            "sender": extract_sender_info(sender), # 송신자 정보 가져오기
-                            "url": get_message_url_from_event(event),
-                            "id": event.message.id,
-                            "text": message_text,
-                            "timestamp": message.date, # datetime 형식의 메세지 발생 시간,
-                            "media": await download_media(message, self.client)
-                        }
-    
-                        logger.info(
-                            f"Detected Message from {new_data['sender'].get('name')}: {message_text} at {new_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
-    
-                        # 메세지를 나에게 포워딩
-                        await self.client.forward_messages(self.my_user_id, event.message)
-                        logger.info(
-                            f"Target(ID: {new_data['sender'].get('id')}, name: {new_data['sender'].get('name')}) spoke. time: {new_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
-                    except Exception as exception:
-                        logger.error(f"Error in telegram event handler: {exception}")
-                    if new_data:
-                        try:
-                            collection.insert_one(new_data) # 데이터 삽입
-                        except Exception as exception:
-                            logger.error(f"Error occurred while inserting data into MongoDB: {exception}")
-                        else:
-                            logger.info(f"Archived a new chat in MongoDB - DB: {DB.NAME}, collection: {collection_name}")
-                else:
-                    logger.warning(
-                        f"MongoDB collection already has same unique index of a chat(channelId: {chat.id}, id: {message.id})")
+                await process_message(chat, self.client, message)
+                sender = extract_sender_info(sender)
+                # 메세지를 나에게 포워딩
+                try:
+                    await self.client.forward_messages(self.my_user_id, event.message)
+                except ChatForwardsRestrictedError:
+                    logger.warning("This chat has message forwarding restricted.")
+                    if message.text:
+                        await self.client.send_message(self.my_user_id, message.text)
+                    if message.media:
+                        await self.client.send_file(self.my_user_id, message.media)
+                    if not message.text and not message.media:
+                        await self.client.send_message(self.my_user_id, "[Unsupported message type]")
+
+
+                logger.info(
+                    f"Target(ID: {sender.get('id')}, name: {sender.get('name')}) spoke. time: {message.date.strftime('%Y-%m-%d %H:%M:%S')}")
     
         try:
             # 채널 엔티티 가져오기
@@ -102,7 +83,7 @@ class ChannelContentMonitorMethods:
         if channel_key in self.monitoring_task_map:
             # 1. 모니터링 Task 취소(모니터링 시작 Task가 실행되고 있었을 경우에 대비하기 위함)
             self.monitoring_task_map[channel_key].cancel()
-    
+
             # 2. 등록된 이벤트 핸들러 제거
             if channel_key in self.event_handlers_map:
                 self.client.remove_event_handler(self.event_handlers_map[channel_key])

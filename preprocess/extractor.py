@@ -4,6 +4,7 @@ import sys
 from bs4 import BeautifulSoup
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from server.logger import logger
+from server.db import Database
 from typing import Optional, Union
 
 def extract_text_blocks_from_html(html) -> list:
@@ -46,21 +47,18 @@ def extract_text_blocks_from_html(html) -> list:
 
 import json
 
-# json 파일에서 마약 은어/약어 로드(추후 데이터베이스에서 로드하도록 변경)
-# 모듈 기준으로 drug_dictionary.json 파일 경로 계산
-current_dir = os.path.dirname(__file__)  # 현재 파일(extractor.py)의 디렉토리
-dictionary_path = os.path.join(current_dir, "drug_dictionary.json")
-with open(dictionary_path, "r", encoding="utf-8") as filestream:
-    dictionary = json.load(filestream)
+# 데이터베이스에서 마약 은어/약어 로드(추후 데이터베이스에서 로드하도록 변경)
+argot_collection = Database.Collection.ARGOT
+drugs_collection = Database.Collection.DRUGS
+argot_dictionary = dict()
+for argot in argot_collection.find():
+    argot_dictionary[argot["name"]] = argot["drugId"]
 
 # 텍스트 길이가 가장 길고 특정 텍스트를 포함하는 원소를 반환하는 함수
 def extract_by_length(strings: Union[str, list[str]]) -> Optional[str]:
     # 은어/약어 사전에 맞는 문자열들을 필터링
-    filtered_strings = [chunk for chunk in strings if sum(keyword in chunk for keyword in dictionary) >= 3]
-    '''filtered_strings = [
-        chunk for chunk in strings
-        if sum(1 for keyword in dictionary if re.search(re.escape(keyword), chunk)) >= 3
-    ]'''
+    filtered_strings = [chunk for chunk in strings if sum(keyword in chunk for keyword in argot_dictionary) >= 3]
+
     # 조건에 맞는 문자열이 있다면 가장 긴 문자열을 글 내용으로 반환하고, 없다면 None 반환
     return str(max(filtered_strings, key=len)) if filtered_strings else None
 
