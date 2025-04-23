@@ -116,7 +116,8 @@ async def process_message(entity, client, message) -> None:
             # 먼저 은어 노드가 데이터베이스에 없을 경우 추가
             summary = run_cypher(query=Neo4j.QueryTemplate.Node.Argot.MERGE,
                                  parameters={
-                                     "name": argot_name
+                                     "name": argot_name,
+                                     "id:": argot.get("drugId"),
                                  }).consume()
             if summary.counters.nodes_created > 0:
                 logger.info(f"새로운 마약 용어가 발견되어 Neo4j 데이터베이스에 추가되었습니다. 발견된 채널의 ID: {entity.id}, 은어: `{argot_name}`")

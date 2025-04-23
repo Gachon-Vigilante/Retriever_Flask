@@ -71,13 +71,15 @@ class Neo4j:
             class Argot:
                 CREATE = """
                     CREATE (a:Argot {
-                      name: $name
+                      name: $name,
+                      drugId: $drugId
                     })
                     RETURN a
                 """
                 MERGE = """
                     MERGE (a:Argot {name: $name})
-                    ON CREATE SET a.name = $name
+                    ON CREATE SET
+                        a.drugId = $drugId
                     RETURN a
                 """
 
