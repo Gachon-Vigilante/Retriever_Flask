@@ -46,7 +46,6 @@ def link_to_html():
         return jsonify({"error": "Please provide 'link' in the request arguments."}), 400
 
     try:
-
         result = crawler.get_html_from_url(data['link'])
         return jsonify(result), 200
     except Exception as e:
