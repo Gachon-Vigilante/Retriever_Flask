@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from typing import Literal
 
 from utils import confirm_request
 from .watson import Watson
@@ -9,13 +10,10 @@ watson_bp = Blueprint('watson', __name__, url_prefix='/watson')
 @watson_bp.route('/c', methods=['POST'])
 def chat_with_watson():
     data = request.json
-    # if response_for_invalid_request := confirm_request(data, {
-    #     'action': (str, ["ask", "reset"]),
-    #     'bot_id': typing.Optional[int],
-    #     'channel_ids': typing.Optional[list],
-    #     'scope': (typing.Optional[str], ["global", "local"])
-    # }):
-    #     return response_for_invalid_request
+    if response_for_invalid_request := confirm_request(data, {
+        'action': Literal["ask", "reset"]
+    }):
+        return response_for_invalid_request
     if not data.get('bot_id') and (not data.get('scope') or not data.get('channel_ids')):
         return {"error": f"Please provide ('bot_id'), or ('channel_ids' and 'scope') in the JSON request body."}
 
@@ -27,7 +25,7 @@ def chat_with_watson():
     if data['action'] == "ask":
         return ask_watson(bot, data)
     elif data['action'] == "reset":
-        bot.clear_message_history()
+        bot.clear_memory()
         return jsonify({"success": True}), 200
 
 

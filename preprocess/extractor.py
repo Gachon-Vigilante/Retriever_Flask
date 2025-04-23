@@ -1,14 +1,13 @@
 import logging
 
 from bs4 import BeautifulSoup
-import os
 
 from server.logger import logger
-from server.db import get_mongo_collection, DB
+from server.db import Database
 from typing import Optional, Union
 
-def extract_text_blocks_from_html(html) -> list:
-    # HTML 문서에서 텍스트 블록 추출
+def extract_text_blocks_from_html(html) -> list[str]:
+    # BeautifulSoup 패키지의 기능을 이용해서 HTML 문서에서 텍스트 블록 추출
     soup = BeautifulSoup(html, "html.parser")
     text_blocks = soup.get_text(separator=" ").split("\n")
     text_blocks = [block.strip() for block in text_blocks if block.strip()]  # 빈 줄 제거
@@ -19,8 +18,8 @@ def extract_text_blocks_from_html(html) -> list:
 import json
 
 # 데이터베이스에서 마약 은어/약어 로드(추후 데이터베이스에서 로드하도록 변경)
-argot_collection = get_mongo_collection(DB.NAME, DB.COLLECTION.ARGOT)
-drugs_collection = get_mongo_collection(DB.NAME, DB.COLLECTION.DRUGS)
+argot_collection = Database.Collection.ARGOT
+drugs_collection = Database.Collection.DRUGS
 argot_dictionary = dict()
 for argot in argot_collection.find():
     argot_dictionary[argot["name"]] = argot["drugId"]
@@ -73,8 +72,3 @@ def extract_telegram_links(data: Union[str, list[str]]) -> list[str]:
                          f"got {type(data)}.")
         return []
 
-
-
-
-if __name__ == "__main__":
-    print(extract_telegram_links("http://t.me/+sample"))

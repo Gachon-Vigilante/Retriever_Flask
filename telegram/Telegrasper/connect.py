@@ -45,20 +45,21 @@ class ConnectMethods:
         return entity
 
     async def connect_channel(self:'TelegramManager', channel_key:typing.Union[int, str]):
+        logger.debug(f"Connecting to the channel... Channel key: {channel_key}")
         try:
             # 초대 링크 처리 (비공개 채널일 경우 필수 작업)
             if isinstance(channel_key, str) and channel_key.startswith("+"):
-                logger.debug(f"Type of connection key is invite link. processing invite link...")
+                logger.debug(f"Type of connection key is invite link. processing invite link... (invite link: {channel_key})")
                 entity = await self.accept_invitation(channel_key)
             else:
                 if isinstance(channel_key, int):  # 정수 형태의 채널 ID 처리
-                    logger.debug(f"Type of connection key is Channel ID. processing Channel ID...")
+                    logger.debug(f"Type of connection key is Channel ID. processing Channel ID... (Channel ID: {channel_key})")
                 else:  # 문자열 형태의 채널 username 처리
-                    logger.debug(f"Type of connection key is Channel @username. processing Channel @username...")
+                    logger.debug(f"Type of connection key is Channel @username. processing Channel @username... (@username: {channel_key})")
                 entity = await self.client.get_entity(channel_key)
 
             if not entity:
-                logger.warning(f"Failed to retrieve entity for the channel.")
+                logger.warning(f"Failed to connect the channel. Failed to retrieve entity for the channel. Channel ID or @username: {channel_key}")
 
             return entity
         except ChannelPrivateError:

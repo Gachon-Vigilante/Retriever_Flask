@@ -50,6 +50,7 @@ def get_url_from_message(entity, message):
 
 from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
 async def download_media(message, client) -> (Optional[bytes], Optional[str]):
+    """텔레그램 메세지에 미디어가 포함되어 있을 경우 미디어 데이터를 바이트 객체로 반환하고, 없으면 (None, None)을 반환하는 함수."""
     if message.media and isinstance(message.media, (MessageMediaPhoto, MessageMediaDocument)):
         try:
             media_bytes = await client.download_media(
