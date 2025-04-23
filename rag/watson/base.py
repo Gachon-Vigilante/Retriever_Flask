@@ -51,7 +51,7 @@ class BaseWatson:
                 raise ValueError(f"챗봇을 호출할 때 챗봇의 ID 또는 채널 ID 목록과 범위 둘 중 하나는 입력해야 하지만, 모두 입력되지 않았습니다.")
 
             # 현재 메모리에 생성된 봇이 없다면, 새 객체를 메모리에 생성.
-            if not cls._instances.get(bot_id):
+            if not bot_id or not cls._instances.get(bot_id):
                 new_bot = super().__new__(cls)
                 new_bot.id = bot_id
                 cls._instances[bot_id] = new_bot
