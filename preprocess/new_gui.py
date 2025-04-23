@@ -1,6 +1,9 @@
 import sys
+import os
 import pandas as pd
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+import requests
+from bs4 import BeautifulSoup
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineSettings
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTextEdit, QFileDialog, QLabel, QMessageBox
@@ -8,15 +11,34 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QUrl
 
 
+# JS 감시용 페이지
+class MonitoringPage(QWebEnginePage):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.js_logs = []
+        self.interrupt_threshold = 10  # JS 로그 30개 넘으면 fallback 트리거
+
+    def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
+        print(f"[JS] {message}")
+        self.js_logs.append(message)
+
+        ad_keywords = ['adsbygoogle', 'doubleclick', 'taboola', 'kakao_ad_area', 'adpnut', 'pelican', 'document.write']
+        if any(keyword in message.lower() for keyword in ad_keywords):
+            if len(self.js_logs) >= self.interrupt_threshold:
+                print("⚠️ JS 로그 과다 - fallback 실행")
+                self.view().stop()
+                if self.parent():
+                    self.parent().fallback_to_html()
+
+
 class DrugPromotionDetector(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.web_view = None
-        self.initUI()
         self.current_index = 0
         self.df = None
         self.file_path = ""
-        
+        self.result_col_index = 5
+        self.initUI()
 
     def initUI(self):
         self.setWindowTitle('Drug Promotion Detector')
@@ -26,26 +48,29 @@ class DrugPromotionDetector(QMainWindow):
         self.setCentralWidget(central_widget)
         layout = QHBoxLayout()
 
-        # 웹뷰 영역
+        # 왼쪽 웹뷰
         left_layout = QVBoxLayout()
         self.web_view = QWebEngineView()
+        settings = self.web_view.settings()
+        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+
+        self.page = MonitoringPage(self)
+        self.page.profile().clearHttpCache()
+        self.web_view.setPage(self.page)
         left_layout.addWidget(self.web_view)
 
-        # 오른쪽 패널
+        # 오른쪽 본문 및 버튼
         right_layout = QVBoxLayout()
-
         self.extracted_text = QTextEdit()
         self.extracted_text.setReadOnly(True)
         right_layout.addWidget(QLabel("추출된 본문:"))
         right_layout.addWidget(self.extracted_text)
 
-        # 버튼 영역
         button_layout = QHBoxLayout()
         self.file_index_label = QLabel("0 / 0")
-        button_layout.addWidget(self.file_index_label)
-
         self.p_button = QPushButton("P (홍보글)")
         self.np_button = QPushButton("NP (홍보글X)")
+        button_layout.addWidget(self.file_index_label)
         button_layout.addWidget(self.p_button)
         button_layout.addWidget(self.np_button)
         right_layout.addLayout(button_layout)
@@ -82,46 +107,72 @@ class DrugPromotionDetector(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx)")
         if file_path:
             self.file_path = file_path
-            self.df = pd.read_excel(file_path, dtype=str)
-            self.df.fillna("", inplace=True)
-            self.result_col_index = 2
+            self.df = pd.read_excel(file_path, dtype=str).fillna("")
             self.find_start_index()
-
-            
+            self.load_current_url()
 
     def find_start_index(self):
-        # 판단 안 된 URL부터 시작
         for i in range(len(self.df)):
-            if pd.isna(self.df.iloc[i, self.result_col_index]) or self.df.iloc[i, self.result_col_index] == "":
+            if self.df.iloc[i, self.result_col_index] == "":
                 self.current_index = i
                 return
-                
 
     def load_current_url(self):
-        print("DEBUG: self.web_view =", self.web_view) 
         if not self.web_view:
             QMessageBox.critical(self, "오류", "웹뷰가 아직 초기화되지 않았습니다!")
             return
-        
+
         url = self.df.iloc[self.current_index, 0]
         if not url.startswith("http"):
             url = "http://" + url
+        print(f"[LOADING] {url}")
+        self.page.js_logs.clear()
         self.web_view.load(QUrl(url))
         self.file_index_label.setText(f"{self.current_index + 1} / {len(self.df)}")
         self.extracted_text.clear()
         self.comment.clear()
 
+    def fallback_to_html(self):
+        url = self.df.iloc[self.current_index, 0]
+        if not url.startswith("http"):
+            url = "http://" + url
+        try:
+            res = requests.get(url, timeout=5, headers={"User-Agent": "Mozilla/5.0"})
+            soup = BeautifulSoup(res.text, "html.parser")
+            # article 태그가 있으면 우선 추출
+            main_content = ""
+            article = soup.find("article")
+            if article:
+                main_content = article.get_text(separator="\n", strip=True)
+            else:
+                # 자주 쓰는 본문 클래스명들
+                for cls in ["article-body", "content", "read", "news_body"]:
+                    section = soup.find("div", class_=cls)
+                    if section:
+                        main_content = section.get_text(separator="\n", strip=True)
+                        break
+                else:
+                    main_content = soup.get_text(separator="\n", strip=True)
+
+            # 본문 출력
+            self.extracted_text.setPlainText("[텍스트 fallback 모드]\n" + main_content[:3000])  # 너무 길면 잘라줌
+        except Exception as e:
+            self.extracted_text.setPlainText(f"[ERROR] 본문 추출 실패: {e}")
+
     def save_result(self, label):
         self.df.iloc[self.current_index, self.result_col_index] = label
+        self.df.iloc[self.current_index, self.result_col_index + 1] = self.comment.toPlainText()
         try:
-            self.df.to_excel(self.file_path, index=False)
+            temp_path = self.file_path + ".tmp"
+            self.df.to_excel(temp_path, index=False)
+            os.replace(temp_path, self.file_path)  # 원본 파일 덮어쓰기
         except Exception as e:
             self.show_message(f"파일 저장 중 오류 발생: {str(e)}")
         self.current_index += 1
         self.load_current_url()
 
     def prev_url(self):
-        if self.current_index > 1:
+        if self.current_index > 0:
             self.current_index -= 1
             self.load_current_url()
 
