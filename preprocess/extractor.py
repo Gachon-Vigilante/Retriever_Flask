@@ -1,19 +1,49 @@
 import logging
-
+import os
+import sys
 from bs4 import BeautifulSoup
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from server.logger import logger
 from server.db import Database
 from typing import Optional, Union
 
-def extract_text_blocks_from_html(html) -> list[str]:
-    # BeautifulSoup 패키지의 기능을 이용해서 HTML 문서에서 텍스트 블록 추출
+def extract_text_blocks_from_html(html) -> list:
+    if not html:
+        return []
+
+    # HTML 문서에서 텍스트 블록 추출
     soup = BeautifulSoup(html, "html.parser")
     text_blocks = soup.get_text(separator=" ").split("\n")
+
     text_blocks = [block.strip() for block in text_blocks if block.strip()]  # 빈 줄 제거
 
-    return text_blocks
+    
 
+    # 추가적으로 태그 내부 텍스트도 수집 (특히 <h1>, <h2>, <p>, <div> 등의 class 포함)
+    '''additional_texts = []
+    for tag in soup.find_all(['h1', 'h2', 'p', 'div', 'span']):
+        text = tag.get_text(strip=True)
+        if text:
+            additional_texts.append(text)
+
+    # 합쳐서 중복 제거 후 반환
+    all_blocks = list(set([block.strip() for block in text_blocks + additional_texts if block.strip()]))
+    '''
+    # 🔹 해시태그 텍스트들을 하나의 문자열로 합치기
+    '''hashtag_texts = [
+        a_tag.get_text(strip=True)
+        for a_tag in soup.find_all("a", href=True)
+        if "/hashtag/" in a_tag["href"]
+    ]
+    if hashtag_texts:
+        joined_hashtags = " ".join(hashtag_texts)
+        all_blocks.append(joined_hashtags)
+'''
+    # 중복 제거 후 반환
+    #return list(set(all_blocks))
+    return text_blocks
+   
+       
 
 import json
 
@@ -53,22 +83,40 @@ import re
 
 # 텍스트에서 텔레그램 링크들을 식별해서 리스트로 묶어 반환하는 함수
 def extract_telegram_links(data: Union[str, list[str]]) -> list[str]:
-    # 텔레그램 주소를 식별하는 정규식 패턴
-    telegram_pattern = r"(?i)(?:https?://)?t\.me/(?:s/|joinchat/)?([~+]?[a-zA-Z0-9_-]+)(?:/\d+)?"
+    telegram_pattern = ""
 
-    # 정규식으로 텔레그램 주소 추출
+    if not data:
+        return []  # None이나 빈 값이면 그냥 빈 리스트로 반환
+
     if isinstance(data, str):
         return re.findall(telegram_pattern, data)
+
     elif isinstance(data, list):
-        if all([isinstance(text, str) for text in data]):
-            # 만약 data가 string의 list일 경우, list 안에 있는 text에 대해서 정규식으로 모두 찾은 다음 list를 flatten해서 반환
-            return [telegram_link for regex_result in map(re.findall, [telegram_pattern]*len(data), data) for telegram_link in regex_result]
+        if all(isinstance(text, str) for text in data):
+            return [
+                telegram_link
+                for regex_result in map(re.findall, [telegram_pattern] * len(data), data)
+                for telegram_link in regex_result
+            ]
         else:
-            logging.critical("Input data of function for extract_telegram_links should be a string or a list of string, "
-                             "but found something else in the list.")
+            logging.critical("extract_telegram_links: 리스트 내부에 문자열이 아닌 요소가 있음.")
             return []
+
     else:
-        logging.critical("Input data of function for extract_telegram_links should be a string or a list of string, "
-                         f"got {type(data)}.")
+        logging.critical(f"extract_telegram_links: 예상치 못한 타입 입력됨: {type(data)}")
         return []
+
+
+
+if __name__ == "__main__":
+   # print(extract_telegram_links("http://t.me/+sample"))
+    sample_html = '''
+    <div class="description" ng-show="$state.includes('model.detail')">
+		<div read-more="" content="<p>아이스팝니다 텔레icegame911 작대기팝니다 아이스샘플 작대기샘플 빙두샘플 차가운술샘플 시원한술샘플 히로뽕샘플 캔디팝니다 엑스터시팝니다 도리도리팝니다 엑시팝니다 엑시팔아요 엑스터시팔어요 엑시파는곳 도리도리팔아요 도리도리파는곳 캔디파는곳 히로뽕파는곳 빙두팔아요 빙두파는곳 히로뽕팔아요 작대기파는곳 작대기팔아요 아이스팔아요 아이스파는곳 떨팝니다 대마초팝니다 대마팝니다 대마팔아요 대마초팔아요 떨팔아요&nbsp;텔레&nbsp;icegame911 캔디구해요 작대기구해요 아이스구해요 빙두구해요 빙두사는곳 아이스사는곳 텔레 icegame911 엘팝니다 lsd팝니다 엘구해요 캔디사요 아이스사요 작대기사요 작대기판매 아이스판매 떨판매 대마초판매 대마판매 아이스구입 작대기구입 빙두판매 차가운술판매 크리스탈팝니다 시원한술판매 차가운술구입 캔디구입 도리도리구입 도리도리판매 시원한술사요 차가운술사요 시원한술구입 텔레 icegame911 아이스가격 아이스1g가격 작대기가격 빙두가격 차가운술가격 시원한술가격 크리스탈가격 떨가격 캔디가격 대마가격 엑스터시가격 대마초가격 엑시가격 도리도리가격 엘사는곳 lsd사는곳 텔레 icegame911 lsd구합니다 아이스구합니다 아이스구히는곳 작대기구하는곳 아이스 차가운술 시원한술 작대기 캔디 엑스터시 엑시 크리스탈 빙두 도리도리 떨 엘 대마 lsd 대마초</p>" text-class="text-overflow" link-class="link color-blue text-big" class="ng-isolate-scope"><div class="readMoreContentContainer text-overflow" ng-bind-html="content"><p>아이스팝니다 텔레icegame911 작대기팝니다 아이스샘플 작대기샘플 빙두샘플 차가운술샘플 시원한술샘플 히로뽕샘플 캔디팝니다 엑스터시팝니다 도리도리팝니다 엑시팝니다 엑시팔아요 엑스터시팔어요 엑시파는곳 도리도리팔아요 도리도리파는곳 캔디파는곳 히로뽕파는곳 빙두팔아요 빙두파는곳 히로뽕팔아요 작대기파는곳 작대기팔아요 아이스팔아요 아이스파는곳 떨팝니다 대마초팝니다 대마팝니다 대마팔아요 대마초팔아요 떨팔아요&nbsp;텔레&nbsp;icegame911 캔디구해요 작대기구해요 아이스구해요 빙두구해요 빙두사는곳 아이스사는곳 텔레 icegame911 엘팝니다 lsd팝니다 엘구해요 캔디사요 아이스사요 작대기사요 작대기판매 아이스판매 떨판매 대마초판매 대마판매 아이스구입 작대기구입 빙두판매 차가운술판매 크리스탈팝니다 시원한술판매 차가운술구입 캔디구입 도리도리구입 도리도리판매 시원한술사요 차가운술사요 시원한술구입 텔레 icegame911 아이스가격 아이스1g가격 작대기가격 빙두가격 차가운술가격 시원한술가격 크리스탈가격 떨가격 캔디가격 대마가격 엑스터시가격 대마초가격 엑시가격 도리도리가격 엘사는곳 lsd사는곳 텔레 icegame911 lsd구합니다 아이스구합니다 아이스구히는곳 작대기구하는곳 아이스 차가운술 시원한술 작대기 캔디 엑스터시 엑시 크리스탈 빙두 도리도리 떨 엘 대마 lsd 대마초</p></div><a href="" class="read-more link color-blue text-big shadow" ng-class="{shadow: !expanded}" ng-show="showLinks" ng-click="toggle()" style="">Show more...</a></div>
+	</div>
+    '''
+    print(extract_promotion_content(sample_html))
+    print(extract_text_blocks_from_html(sample_html))
+
+    
 

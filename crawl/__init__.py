@@ -15,6 +15,7 @@ def crawl_web_links():
         return response_for_invalid_request
 
     try:
+        
         result = crawler.search_links(data['queries'], data['max_results'])
         return jsonify(result), 200
     except Exception as e:
