@@ -2,6 +2,7 @@ import asyncio
 import typing
 import datetime
 from pymongo.errors import DuplicateKeyError
+from telethon.tl.types import Channel
 
 from server.db import Database
 from server.logger import logger
@@ -19,7 +20,9 @@ class ChannelMethods(ChannelContentMethods, ChannelContentMonitorMethods):
         collection = Database.Collection.Channel.INFO  # 컬렉션 선택
         entity = asyncio.run_coroutine_threadsafe(self.connect_channel(channel_key), self.loop).result()
 
-        if not entity:
+        # entity가 Channel 객체인지 확인. None이거나 다른 객체이면 이 entity는 무시
+        if not isinstance(entity, Channel):
+            logger.warning(f"Entity is not a channel. Skipping processing. Entity: {entity}")
             return {}
 
         channel_info = {

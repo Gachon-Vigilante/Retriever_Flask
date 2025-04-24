@@ -179,7 +179,7 @@ class ApiResponse:
             self.data = response.reason
 
     def __repr__(self):
-        string = f"status: {self.status_code}\nresponse:"
+        string = f"status: {self.status_code}\ndata:"
         if isinstance(self.data, dict):
             for key, value in self.data.items():
                 string += f"\n\t{key}: {value}"

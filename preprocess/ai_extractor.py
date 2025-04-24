@@ -61,7 +61,9 @@ The following argot terms are commonly used to refer to illegal drugs and may in
 * Return False under `binary_classification` if the content merely reports on drug-related activities (e.g., police investigations, news coverage, public announcements) without promoting sales.
 * If meaning is ambiguous or there's no clear evidence of promotion, return False under `binary_classification`.
 * If `binary_classification` is `False`, leave other fields empty.
-* If `binary_classification` is `True`, return the exact portion of the input text that promotes drug sales under `promotion_content` (without translation or alteration). Also, from the promotion content, return any strings that appear to be Telegram addresses, @usernames, or invitation links as a list under `telegram_key`.
+* If `binary_classification` is `True`, return the exact portion of the input text that promotes drug sales under `promotion_content` (without translation or alteration). Also, from the promotion content, return any strings that appear to be Telegram addresses, @usernames, or invitation links as a list under `telegram_key`. This means:
+    - Strip prefixes like t.me/, @, or phrases like <텔레그램 주소>.
+    - For example, from t.me/yourtrip01 or <텔레그램 주소: yourtrip01> or @yourtrip01, extract just "yourtrip01".
 
 
 ### **Rules:**

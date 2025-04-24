@@ -117,7 +117,7 @@ async def process_message(entity, client, message) -> None:
             summary = run_cypher(query=Neo4j.QueryTemplate.Node.Argot.MERGE,
                                  parameters={
                                      "name": argot_name,
-                                     "id:": argot.get("drugId"),
+                                     "drugId": argot.get("drugId"),
                                  }).consume()
             if summary.counters.nodes_created > 0:
                 logger.info(f"새로운 마약 용어가 발견되어 Neo4j 데이터베이스에 추가되었습니다. 발견된 채널의 ID: {entity.id}, 은어: `{argot_name}`")

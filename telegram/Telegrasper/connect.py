@@ -68,6 +68,12 @@ class ConnectMethods:
         except ChannelInvalidError:
             logger.error(f"Invalid Channel ID or @username: {channel_key}")
             return None
+        except InviteHashExpiredError:
+            logger.warning(f"초대 링크가 만료되었습니다: {channel_key}")
+            return None
+        except InviteHashInvalidError:
+            logger.warning(f"초대 링크가 유효하지 않습니다: {channel_key}")
+            return None
         except Exception as e:
             logger.error(f"An error occurred in connect_channel(): {e}")
             return None
