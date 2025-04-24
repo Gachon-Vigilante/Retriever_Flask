@@ -3,7 +3,7 @@ import typing
 from telethon.sync import TelegramClient, types
 from telethon.tl.functions.messages import CheckChatInviteRequest, ImportChatInviteRequest
 from telethon.errors import InviteHashEmptyError, InviteHashExpiredError, InviteHashInvalidError, ChannelInvalidError, \
-    ChannelPrivateError
+    ChannelPrivateError, FloodWaitError
 
 from server.logger import logger
 
@@ -62,6 +62,9 @@ class ConnectMethods:
                 logger.warning(f"Failed to connect the channel. Failed to retrieve entity for the channel. Channel ID or @username: {channel_key}")
 
             return entity
+        except FloodWaitError as e:
+            wait_time = e.seconds
+            logger.warning(f"요청이 너무 많아 제한되었습니다. {wait_time}초 후에 다시 시도하세요.")
         except ChannelPrivateError:
             logger.error(f"The channel is private and you are not invited yet. Channel ID or @username: {channel_key}")
             return None

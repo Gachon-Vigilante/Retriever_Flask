@@ -83,7 +83,7 @@ import re
 
 # 텍스트에서 텔레그램 링크들을 식별해서 리스트로 묶어 반환하는 함수
 def extract_telegram_links(data: Union[str, list[str]]) -> list[str]:
-    telegram_pattern = ""
+    telegram_pattern = r"(?i)(?:https?://)?t\.me/(?:s/|joinchat/)?([~+]?[a-zA-Z0-9_-]+)(?:/\d+)?"
 
     if not data:
         return []  # None이나 빈 값이면 그냥 빈 리스트로 반환
