@@ -1,7 +1,8 @@
 import asyncio
 import typing
 from telethon import events
-from telethon.errors import ChatForwardsRestrictedError
+from telethon.errors import ChatForwardsRestrictedError as ChatForwardsRestrictedError1
+from telethon.errors.rpcerrorlist import ChatForwardsRestrictedError as ChatForwardsRestrictedError2
 
 from .channelscraper import process_message
 from .utils import *
@@ -38,7 +39,7 @@ class ChannelContentMonitorMethods:
                 # 메세지를 나에게 포워딩
                 try:
                     await self.client.forward_messages(self.my_user_id, event.message)
-                except ChatForwardsRestrictedError:
+                except ChatForwardsRestrictedError1 and ChatForwardsRestrictedError2:
                     logger.warning("This chat has message forwarding restricted.")
                     if message.text:
                         await self.client.send_message(self.my_user_id, message.text)
