@@ -78,7 +78,7 @@ class PromotionLabelerApp(QMainWindow):
             df = df.reset_index(drop=True)
 
             ai_tasks = []
-            with ThreadPoolExecutor(max_workers=5) as executor:
+            with ThreadPoolExecutor(max_workers=3) as executor:
                 for idx in range(1, len(df)):
                     url = str(df.iloc[idx, 0]).strip()
                     if not url:
@@ -87,7 +87,7 @@ class PromotionLabelerApp(QMainWindow):
                     html = get_html_from_url(url)
 
                     # 알고리즘 기반 추출
-                    if pd.isna(df.iloc[idx, 1]) or str(df.iloc[idx, 1]).strip() == "":
+                    if pd.isna(df.iloc[idx, 3]) or str(df.iloc[idx, 3]).strip() == "ERROR":
                         try:
                             alg_res = extract_promotion_content(html)
                             alg_content_raw = alg_res.get("promotion_content", "")
@@ -102,9 +102,9 @@ class PromotionLabelerApp(QMainWindow):
                         df.to_excel(file_path, index=False)
                     else:
                         print(f"[알고리즘 추출 건너뜀] 인덱스 {idx}")
-                        
+
                     # AI 기반 추출
-                    if pd.isna(df.iloc[idx, 2]) or str(df.iloc[idx, 2]).strip() == "":
+                    if pd.isna(df.iloc[idx, 4]) or str(df.iloc[idx, 4]).strip() == "ERROR":
                         ai_tasks.append(executor.submit(process_ai_extraction, idx, html))
                     else:
                         print(f"[AI 추출 건너뜀] 인덱스 {idx}")
