@@ -66,6 +66,8 @@ distro==1.9.0
     #   openai
 dnspython==2.7.0
     # via pymongo
+et-xmlfile==2.0.0
+    # via openpyxl
 executing==2.2.0
     # via stack-data
 faiss-cpu==1.10.0
@@ -268,6 +270,8 @@ openai==1.74.0
     # via
     #   langchain-openai
     #   langchain-teddynote
+openpyxl==3.1.5
+    # via -r requirements.in
 orjson==3.10.16
     # via
     #   langgraph-sdk

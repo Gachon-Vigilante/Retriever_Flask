@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, Json
 
 from server.db import Database
 from server.logger import logger
+from .indications import generate_by_channel, generate_by_others, generate_by_chats
 from .memory import checkpointer
 
 load_dotenv()
@@ -30,12 +31,14 @@ MODEL_NAME = get_model_name(LLMs.GPT4o)
 LIGHT_MODEL_NAME = get_model_name(LLMs.GPT4o_MINI)
 
 DB_INFORMATION = """The MongoDB database contains information about Telegram channels and all chat messages sent and received within each channel.
-The database contains two collections: `"channel_info"` for storing channel information and `"channel_data"` for storing chat messages within channels. The schema for each collection is as follows:  
+The database contains two collections: `"channel_info"` for storing metadata of channel and `"channel_data"` for storing chat messages within channels. The schema for each collection is as follows:  
 ### **`channel_info` Collection**  
-- **`id`**: Integer. The unique ID of the channel.  
+- **`_id`**: Integer. The unique ID of the channel.  
 - **`title`**: String. The name of the channel.  
 - **`username`**: String. The `@username` of the channel.  
-- **`date`**: Datetime. The date and time when the channel was created.  
+- **`startedAt`**: Datetime. The date and time when the channel was created.  
+- **`discoveredAt`**: Datetime. The date and time when the channel was discovered by this system.  
+- **`updatedAt`**: Datetime. The date and time when the last chat message was updated.  
 
 ### **`channel_data` Collection**  
 - **`channelId`**: Integer. The ID of the channel the chat belongs to. Linked to the `"id"` field in the `"channel_info"` collection.  
@@ -47,8 +50,15 @@ The database contains two collections: `"channel_info"` for storing channel info
 
 class Query(BaseModel):
     """JSON for database request"""
-    collection: str = Field(description="The name of collection to query.")
-    pipeline: Json[list[dict[str, Any]]] = Field(description="The best aggregation pipeline of query to answer user question.")
+    collection: Literal["channel_info", "channel_data"] = Field(
+        description="""Determine which collection to query. 
+        If you need metadata of channel to answer the question(e.g. createdAt, discoveredAt, title), answer "channel_info".
+        If you need chat data of channel to answer the question(e.g. recent chats, views), answer "channel_data". 
+        """
+    )
+    pipeline: Json[list[dict[str, Any]]] = Field(
+        description="The best aggregation pipeline of query to answer user question.")
+
 
 # 에이전트 상태를 정의하는 타입 딕셔너리, 메시지 시퀀스를 관리하고 추가 동작 정의
 class GraphState(TypedDict):
@@ -56,12 +66,14 @@ class GraphState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     question: Annotated[str, "Question"]  # 질문
     context: Annotated[Union[str, Sequence[BaseMessage]], "Context"]  # 문서의 검색 결과
-    db_query: Annotated[Query, "Query"] # 데이터베이스 쿼리
+    db_query: Annotated[Query, "Query"]  # 데이터베이스 쿼리
     answer: Annotated[str, "Answer"]  # 답변
     debug: Annotated[bool, "Debug"]
     type: Annotated[Literal["metadata", "data", "others"], "Type"]
+    collection: Annotated[Literal["channel", "chats"], "Type"]
 
-def update_state(state: GraphState, node_name:str, **updates) -> GraphState:
+
+def update_state(state: GraphState, node_name: str, **updates) -> GraphState:
     """Graph의 State를 입력받고, 입력받은 State에서 **updates로 받은 딕셔너리를 반영해서 수정된 State를 반환하는 함수."""
     new_state: GraphState = state.copy()
     new_state.update(**updates)
@@ -78,7 +90,7 @@ def load_from_dict(data: dict, content_key: str, metadata_keys=None) -> Document
 class LangGraphMethods:
     # Root Nodes
     @staticmethod
-    def ask_question(state:GraphState) -> GraphState:
+    def ask_question(state: GraphState) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: question ===\n")
         question = state["messages"][-1].content
@@ -88,23 +100,25 @@ class LangGraphMethods:
                             type="others")
 
     @staticmethod
-    def classify_question(state:GraphState) -> Literal["metadata", "data", "others"]:
+    def classify_question(state: GraphState) -> Literal["metadata", "data", "others"]:
         """
             사용자의 초기 질문을 바탕으로 메타데이터 기반 질문인지, 데이터 기반 질문인지, 이전 답변 기반 질문인지를 AI가 판단해서
             이진 분류(Binary Classification)을 수행하는 함수.
             메타데이터 기반일 경우 'metadata', 데이터 기반일 경우 'data'를 반환한다.
         """
+
         # 데이터 모델 정의
         class Classification(BaseModel):
             """Classification result for user question."""
             question_classification: Literal["metadata", "data", "others"] = Field(
                 description="""Response 'metadata' if the question is based on chat metadata(e.g. channel id, send time, views etc.), 
-                            'data' if it is based on chat data(e.g. drug type, sale place, price etc.),
+                            'data' if it is based on chat data(e.g. sale contact, recruitment, drug product type, sale place, price, discount event, how to buy etc.),
                             'others' if it is general question(e.g. greetings, questions based on previous chat history...)"""
             )
 
         # LLM 모델 초기화 -> 구조화된 출력을 위한 LLM 설정
-        llm_with_structured_output = ChatOpenAI(temperature=0, model=LIGHT_MODEL_NAME, streaming=True).with_structured_output(Classification)
+        llm_with_structured_output = ChatOpenAI(temperature=0, model=MODEL_NAME,
+                                                streaming=True).with_structured_output(Classification)
 
         # 분류를 요구하는 프롬프트 템플릿 정의
         prompt = PromptTemplate(
@@ -143,10 +157,9 @@ class LangGraphMethods:
                 print("\n==== [DECISION: GENERAL QUESTION RELEVANT] ====\n")
             return "others"
 
-
     # 메타데이터 기반 질문에 대응하는 Graph Branch
     @staticmethod
-    def generate_db_query(state:GraphState) -> GraphState:
+    def generate_db_query(state: GraphState, channel_ids: list[int]) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: generate db query ===\n")
         # LLM 모델 초기화
@@ -164,7 +177,7 @@ class LangGraphMethods:
             pipeline: [{{appropriate_query}}, {{appropriate_conditions}}, ...]
             
             If the user question is asked without specifying a channel ID or any identifying information for a channel, assume that the data should be retrieved from all channels by default.
-            The collection should be only string, which is name of the collection to query.
+            The collection should be only string, which is the name of the collection to query.
             The aggregation pipeline should be list of JSON, which is directly convertible to JSON. 
             Both collection and pipeline should be without any Markdown formatting or other unnecessary text.  
             
@@ -185,11 +198,10 @@ class LangGraphMethods:
             ]
             """
 
-        prompts =  ChatPromptTemplate.from_messages([
+        prompts = ChatPromptTemplate.from_messages([
             ("system", system_message),
             ("user", "{question}"),
         ])
-
 
         # prompt + llm 바인딩 체인 생성
         chain = prompts | llm
@@ -200,22 +212,36 @@ class LangGraphMethods:
         # 데이터베이스 쿼리 받기
         query = chain.invoke({"database_information": DB_INFORMATION, "question": question})
 
-        return update_state(state, node_name="generate_db_query", db_query=query, type="metadata")
+        if query.collection == "channel_info":
+            query.pipeline.insert(0, {
+                "$match": {
+                    "_id": {
+                        "$in": channel_ids
+                    }
+                }
+            })
+
+        return update_state(state,
+                            node_name="generate_db_query",
+                            db_query=query,
+                            type="metadata",
+                            collection="channel" if query.collection == "channel_info" else "chats")
 
     @staticmethod
-    def execute_db_query(state:GraphState) -> GraphState:
+    def execute_db_query(state: GraphState) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: execute db query ===\n")
         collection_name, pipeline = state["db_query"].collection, state["db_query"].pipeline
-        cursor = Database.OBJECT[collection_name].aggregate(pipeline) # state["db_query"].pipeline 은 Pydantic 의 Json 형식으로 지정되었으므로 바로 사용 가능
-        context = [load_from_dict(doc, content_key="text", metadata_keys=["views", "url", "id", "timestamp"]) for doc in cursor] if collection_name == "channel_data" else list(cursor)
+        cursor = Database.OBJECT[collection_name].aggregate(
+            pipeline)  # state["db_query"].pipeline 은 Pydantic 의 Json 형식으로 지정되었으므로 바로 사용 가능
+        context = [load_from_dict(doc, content_key="text", metadata_keys=["views", "url", "id", "timestamp"]) for doc in
+                   cursor] if collection_name == "channel_data" else list(cursor)
 
         return update_state(state, node_name="execute_db_query", context=context)
 
-
     # 데이터 기반 질문에 대응하는 Graph Branch
     @staticmethod
-    def execute_retriever(state:GraphState, retriever_tool:Tool) -> GraphState:
+    def execute_retriever(state: GraphState, retriever_tool: Tool) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: execute retriever ===\n")
         # rewrite_question에서 넘어온 경우에 원래 질문에서 바뀐 다른 새로운 질문을 입력해야 하므로, 현재 상태에서 마지막 메시지(질문) 추출.
@@ -230,62 +256,32 @@ class LangGraphMethods:
         # 에이전트 응답 생성
         response = model.invoke(question)
 
-        return update_state(state, node_name="execute_retriever", messages=[response], type="data")
-
+        return update_state(state,
+                            node_name="execute_retriever",
+                            messages=[response],
+                            type="data",
+                            collection="chats",)
 
     @staticmethod
-    def handle_error(state:GraphState) -> GraphState:
+    def handle_error(state: GraphState) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: handle error ===\n")
         return update_state(state, node_name="handle_error")
 
     # 모든 것이 검증된 후 context를 기반으로 답변을 생성하는 Graph Branch
     @staticmethod
-    def generate(state:GraphState) -> GraphState:
+    def generate(state: GraphState) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: generate ===\n")
-        indication = """You are an AI assistant helping an investigator trying to investigate a drug-selling channel. You are specialized in Question-Answering (QA) tasks within a Retrieval-Augmented Generation (RAG) system. 
-            Your primary mission is to answer questions based on provided context or chat history.
-            Provided context is chat data collected from a Telegram channel where drugs are sold.
-            Ensure your response is concise and directly addresses the question.
-    
-            ###
-    
-            Your final answer should be written concisely (but include important numerical values, technical terms, jargon, and names), followed by the source of the information.
-    
-            # Steps
-    
-            1. Carefully read and understand the context provided and the chat history.
-            2. Identify the key information related to the question within the context.
-            3. Formulate a concise answer based on the relevant information.
-            4. Ensure your final answer directly addresses the question.
-            5. List the source of the answer in bullet points, which must be a url of the document, followed by brief part of the context. Omit if the source cannot be found.
-    
-            # Output Format:
-            
-            Your final answer here, with numerical values, technical terms, jargon, and names in their original language
-    
-            **Source**(Optional)
-            - (Source of the answer, must be a url of the document, followed by brief part of the context. Omit if you can't find the source of the answer.)
-            - (list more if there are multiple sources)
-            - ...
-    
-            ###
-    
-            Remember:
-            - It's crucial to base your answer solely on the **PROVIDED CONTEXT**. 
-            - DO NOT use any external knowledge or information not present in the given materials.
-            - If the provided context is empty or missing, but there is a prior Q&A history available, you may answer based on the the previous questions and answers.
-            - When the user asks a question like "What did I ask earlier?" or "What was your previous answer?", you must refer to the previous messages in this conversation.
-            - If you can't find the source of the answer, you should answer that you don't know.
-    
-            ###
-            
-            # Here is the CONTEXT that you should use to answer the question:
-            {context}
-        """
 
         if state.get("type") != "others":
+            if state.get("type") == "data":
+                state["context"] = state["messages"][-1].content # retriever tool node의 결과를 context로 저장
+            if state.get("collection") == "channel":
+                indication = generate_by_channel
+            else:
+                indication = generate_by_chats # type이 "chats"일 때
+
             # 기존 state["messages"]에 새로운 지시와 질문을 더해서 같이 제공한다.
             # memory를 설정하면 state["messages"]에 계속해서 대화 기록이 저장되기 때문에,
             # 이를 AI가 받아서 이전 채팅 기록에 근거한 답변을 생성할 수 있게 된다.
@@ -302,16 +298,16 @@ class LangGraphMethods:
             rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
 
             # 답변 생성
-            response = rag_chain.invoke({"context": state.get("context", ""), "question": state.get("question", ""),})
+            response = rag_chain.invoke({"context": state.get("context", ""), "question": state.get("question", ""), })
         else:
             llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
             # 답변 생성
             response = llm.invoke(state["messages"])
 
-        return update_state(state, node_name="generate", messages=[response], context="") # 이전 질문에서 얻어낸 context가 다음 historical 질문에 영향을 주지 않도록 context 초기화
+        return update_state(state, node_name="generate", messages=[response],
+                            context="")  # 이전 질문에서 얻어낸 context가 다음 historical 질문에 영향을 주지 않도록 context 초기화
 
-
-    def build_graph(self:'Watson') -> Optional[CompiledStateGraph]:
+    def build_graph(self: 'Watson') -> Optional[CompiledStateGraph]:
         if not self.chats:
             return None
 
@@ -330,7 +326,7 @@ class LangGraphMethods:
         workflow = StateGraph(GraphState)
 
         workflow.add_node("ask_question", self.ask_question)
-        workflow.add_node("generate_db_query", self.generate_db_query)
+        workflow.add_node("generate_db_query", lambda state: self.generate_db_query(state, self.channels))
         workflow.add_node("execute_db_query", self.execute_db_query)
         workflow.add_node("execute_retriever", lambda state: self.execute_retriever(state, retriever_tool))
         workflow.add_node("retrieve", retriever_tool_node)
@@ -347,7 +343,7 @@ class LangGraphMethods:
                 # 조건 출력을 그래프 노드에 매핑
                 "metadata": "generate_db_query",
                 "data": "execute_retriever",
-                "history": "generate",
+                "others": "generate",
             }
         )
 
@@ -367,8 +363,6 @@ class LangGraphMethods:
 
     def _update_graph(self: 'Watson'):
         self.graph = self.build_graph()
-
-
 
     # 체인 실행(Run Chain)
     # 문서에 대한 질의를 입력하고, 답변을 출력한다.
@@ -391,7 +385,7 @@ class LangGraphMethods:
             saved_state = self.graph.get_state(config)
             try:
                 answer = self.graph.invoke(
-                    inputs, # 질문 입력
+                    inputs,  # 질문 입력
                     # 세션 ID 기준으로 대화를 기록. 현재는 세션 ID가 고정이라서 bot 하나당 하나의 세션만 유지됨.
                     config=config
                 )["messages"][-1].content

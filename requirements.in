@@ -4,6 +4,7 @@
 datetime
 python-dotenv
 numpy
+openpyxl # pandas Dataframe을 xlsx로 저장하기 위한 프레임워크
 
 # 웹 크롤링 기능에 필요한 패키지
 selenium
