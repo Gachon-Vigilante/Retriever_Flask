@@ -15,6 +15,7 @@ from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel, Field, Json
+from weaviate.classes.query import Filter
 
 from server.db import Database
 from server.logger import logger
@@ -328,7 +329,15 @@ class LangGraphMethods:
 
         # 도구 초기화
         retriever_tool = create_retriever_tool(
-            retriever=self.vectorstore.as_retriever(search_kwargs={"k": 6}),  # 6개의 문서 검색,
+            retriever=self.vectorstore.as_retriever(
+                search_kwargs={
+                    "k": 6,
+                    "filters": Filter.any_of([  # Combines the below with `|`
+                        Filter.by_property("channelId").equal(channel_id)
+                        for channel_id in self.channels
+                    ]) # 필터로 채널 ID가 찾는 채널들 안에 있는 객체만 반환하는 retriever 생성
+                }
+            ),  # 6개의 문서 검색,
             name="retrieve_chats_in_telegram_channel",
             description="Searches and returns a few chat messages from the Telegram channel that are most relevant to the question.",
             document_prompt=PromptTemplate.from_template(

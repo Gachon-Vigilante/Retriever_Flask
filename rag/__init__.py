@@ -2,10 +2,12 @@ from flask import Blueprint, request, jsonify
 from typing import Literal
 
 from utils import confirm_request
-from .watson import Watson
+from .watson import Watson, WatsonRegistry
 from server.logger import logger
 
 watson_bp = Blueprint('watson', __name__, url_prefix='/watson')
+
+WatsonRegistry.load_existing_bots()
 
 @watson_bp.route('/c', methods=['POST'])
 def chat_with_watson():

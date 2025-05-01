@@ -56,6 +56,8 @@ motor # langchain의 MongodbLoader를 사용할 경우 필요.
 langchain-teddynote # langchain 관련 기능을 보다 더 편리하게 사용하기 위한 목적으로 만들어진 teddynote의 패키지. 필요여부에 따라 제거 가능
 langgraph-checkpoint-mongodb
 IPython
+langchain-weaviate
+weaviate-client
 
 
 # 클러스터링에 필요한 패키지
