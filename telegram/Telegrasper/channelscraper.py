@@ -48,11 +48,9 @@ class ChannelContentMethods:
 
     # 채널 내의 데이터를 스크랩하는 함수
     async def scrape_channel_content(self:'TelegramManager', channel_key:typing.Union[int, str]) -> dict:
-        logger.debug(f"Connecting to channel: {channel_key}")
         try:
             entity = await self.connect_channel(channel_key)
             if entity is None:
-                logger.warning("Failed to connect to the channel.")
                 return {"status": "warning",
                         "message": "Failed to connect to the channel."}
             # 메시지 스크랩

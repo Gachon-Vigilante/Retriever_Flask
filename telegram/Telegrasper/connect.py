@@ -62,21 +62,25 @@ class ConnectMethods:
                 logger.warning(f"Failed to connect the channel. Failed to retrieve entity for the channel. Channel ID or @username: {channel_key}")
 
             return entity
-        except FloodWaitError as e:
-            wait_time = e.seconds
-            logger.warning(f"요청이 너무 많아 제한되었습니다. {wait_time}초 후에 다시 시도하세요.")
-        except ChannelPrivateError:
-            logger.error(f"The channel is private and you are not invited yet. Channel ID or @username: {channel_key}")
-            return None
-        except ChannelInvalidError:
-            logger.error(f"Invalid Channel ID or @username: {channel_key}")
-            return None
-        except InviteHashExpiredError:
-            logger.warning(f"초대 링크가 만료되었습니다: {channel_key}")
-            return None
-        except InviteHashInvalidError:
-            logger.warning(f"초대 링크가 유효하지 않습니다: {channel_key}")
+        except (FloodWaitError,
+                ChannelPrivateError,
+                ChannelInvalidError,
+                InviteHashEmptyError,
+                InviteHashExpiredError,
+                InviteHashInvalidError,
+                ValueError,
+                ) as e:
+            if isinstance(e, FloodWaitError):
+                wait_time = e.seconds
+                logger.warning(f"요청이 너무 많아 제한되었습니다. {wait_time}초 후에 다시 시도하세요.")
+            elif isinstance(e, ChannelPrivateError):
+                logger.warning(f"The channel is private and you are not invited yet. Channel ID or @username: {channel_key}")
+            elif isinstance(e, ChannelInvalidError):
+                logger.warning(f"Invalid Channel ID or @username: {channel_key}")
+            elif isinstance(e, ValueError):
+                logger.warning(e)
+            logger.warning("Failed to connect to the channel.")
             return None
         except Exception as e:
-            logger.error(f"An error occurred in connect_channel(): {e}")
+            logger.error(f"Error in connect_channel(): {e}")
             return None

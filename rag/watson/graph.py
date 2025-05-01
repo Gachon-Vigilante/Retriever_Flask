@@ -220,6 +220,21 @@ class LangGraphMethods:
                     }
                 }
             })
+        else:
+            query.pipeline.insert(0, {
+                "$match": {
+                    "text": {
+                        "$ne": ""
+                    }
+                }
+            })
+            query.pipeline.insert(0, {
+                "$match": {
+                    "channelId": {
+                        "$in": channel_ids
+                    }
+                }
+            })
 
         return update_state(state,
                             node_name="generate_db_query",

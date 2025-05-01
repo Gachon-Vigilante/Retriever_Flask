@@ -54,12 +54,13 @@ class ChannelContentMonitorMethods:
     
         try:
             # 채널 엔티티 가져오기
-            channel = await self.connect_channel(channel_key)
-            logger.debug(f"Monitoring channel - Channel Name: {channel.title}, Channel ID: {channel.id}")  # https://t.me/<channel_username>의 채널 ID 출력
-    
-            # 이벤트 핸들러 저장 및 등록
-            self.event_handlers_map[channel_key] = event_handler
-            self.client.add_event_handler(event_handler, events.NewMessage(chats=channel.id))
+            entity = await self.connect_channel(channel_key)
+            if entity:
+                logger.debug(f"Monitoring channel - Channel Name: {entity.title}, Channel ID: {entity.id}")  # https://t.me/<channel_username>의 채널 ID 출력
+
+                # 이벤트 핸들러 저장 및 등록
+                self.event_handlers_map[channel_key] = event_handler
+                self.client.add_event_handler(event_handler, events.NewMessage(chats=entity.id))
         except asyncio.CancelledError:
             logger.info(f"Task for {channel_key} was cancelled. Cleaning up...")
         except Exception as e:

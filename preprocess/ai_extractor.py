@@ -30,6 +30,13 @@ def extract_promotion_by_openai(html: str) -> dict[str, str]:
     # 전체 HTMl 텍스트를 블록으로 분할
     text_blocks = extract_text_blocks_from_html(html)
 
+    if not html or not text_blocks or len(html) == 0:
+        return {
+            "classification_result": False,
+            "promotion_content": "",
+            "telegrams": [],
+        }
+
 
     # LLM 모델 초기화 -> 구조화된 출력을 위한 LLM 설정
     llm_with_structured_output = ChatOpenAI(temperature=0,

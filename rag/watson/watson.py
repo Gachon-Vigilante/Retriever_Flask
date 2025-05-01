@@ -110,6 +110,7 @@ class Watson(VectorStoreMethods, LangGraphMethods, MongoDBMethods, MemoryMethods
 
         self.vectorstore = self.initialize_vectorstore()
         self.update_vectorstore()
+        self._update_graph()
 
         self.initialized = True
 
