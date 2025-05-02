@@ -13,3 +13,5 @@ from .local_vectorstore import __file__ as f
 vectorstore_dir = join(dirname(f))
 
 dimension_size = 1536
+
+weaviate_index_name = "TelegramMessages"

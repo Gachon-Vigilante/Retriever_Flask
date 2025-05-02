@@ -1,26 +1,26 @@
 import typing
-from typing import Any, Literal, Annotated, Sequence, TypedDict, Union, Optional
+from datetime import datetime
+from typing import Any, Literal, Annotated, Sequence, TypedDict, Optional
 
 from dotenv import load_dotenv
 from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage, BaseMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import create_retriever_tool, Tool
+from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langchain_teddynote.models import get_model_name, LLMs
 from langgraph.constants import END
 from langgraph.graph import StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel, Field, Json
 from weaviate.classes.query import Filter
 
-from server.db import Database
 from server.logger import logger
-from .indications import generate_by_channel, generate_by_others, generate_by_chats
+from .indications import generate_by_channel, generate_by_chats
 from .memory import checkpointer
+from .weaviate import WeaviateClientContext
 
 load_dotenv()
 
@@ -61,16 +61,24 @@ class Query(BaseModel):
         description="The best aggregation pipeline of query to answer user question.")
 
 
+class SearchCondition(BaseModel):
+    """LLM이 생성할 Weaviate 벡터 검색 조건"""
+    query: Optional[str] = Field(None, description="The search text to use for vector-based similarity.")
+    channelId: Optional[int] = Field(None, description="Target Telegram channel ID for filtering.")
+    after: Optional[str] = Field(None, description="ISO date string for filtering messages after a time.")
+    before: Optional[str] = Field(None, description="ISO date string for filtering messages before a time.")
+    keyword: Optional[str] = Field(None, description="A keyword that should appear in the document.")
+
+
 # 에이전트 상태를 정의하는 타입 딕셔너리, 메시지 시퀀스를 관리하고 추가 동작 정의
 class GraphState(TypedDict):
     # add_messages reducer 함수를 사용하여 메시지 시퀀스를 관리
     messages: Annotated[Sequence[BaseMessage], add_messages]
     question: Annotated[str, "Question"]  # 질문
-    context: Annotated[Union[str, Sequence[BaseMessage]], "Context"]  # 문서의 검색 결과
     db_query: Annotated[Query, "Query"]  # 데이터베이스 쿼리
     answer: Annotated[str, "Answer"]  # 답변
     debug: Annotated[bool, "Debug"]
-    type: Annotated[Literal["metadata", "data", "others"], "Type"]
+    type: Annotated[Literal["data", "others"], "Type"]
     collection: Annotated[Literal["channel", "chats"], "Type"]
 
 
@@ -87,6 +95,38 @@ def load_from_dict(data: dict, content_key: str, metadata_keys=None) -> Document
     return Document(page_content=data[content_key],
                     metadata={key: data[key] for key in data.keys() if key in metadata_keys})
 
+def extract_search_conditions(question: str) -> SearchCondition:
+    llm = ChatOpenAI(model=MODEL_NAME, temperature=0).with_structured_output(SearchCondition)
+
+    prompt = PromptTemplate.from_template(
+        """Extract search conditions from the question for Weaviate. Return both the main query (if any) and filters.
+        Question: {question}
+        Only include filters that are clearly indicated.
+        """
+    )
+
+    chain = prompt | llm
+    return chain.invoke({"question": question})
+
+def build_filter_from_condition(cond: SearchCondition, channel_ids: list[int]):
+    filters = [
+        Filter.any_of([
+            Filter.by_property("channelId").equal(channel_id)
+            for channel_id in channel_ids
+        ])
+    ]
+    if cond.keyword:
+        filters.append(Filter.by_property("text").like(f"*{cond.keyword}*"))
+    if cond.after:
+        filters.append(Filter.by_property("timestamp").greater_or_equal(cond.after))
+    if cond.before:
+        filters.append(Filter.by_property("timestamp").less_or_equal(cond.before))
+
+    if len(filters) == 1:
+        return filters[0]
+    else:
+        return Filter.all_of(filters)
+
 
 class LangGraphMethods:
     # Root Nodes
@@ -100,21 +140,21 @@ class LangGraphMethods:
                             question=question,
                             type="others")
 
+
     @staticmethod
-    def classify_question(state: GraphState) -> Literal["metadata", "data", "others"]:
+    def classify(state: GraphState) -> Literal["data", "others"]:
         """
-            사용자의 초기 질문을 바탕으로 메타데이터 기반 질문인지, 데이터 기반 질문인지, 이전 답변 기반 질문인지를 AI가 판단해서
+            사용자의 초기 질문을 바탕으로 데이터 기반 질문인지, 이전 답변 기반 질문인지를 AI가 판단해서
             이진 분류(Binary Classification)을 수행하는 함수.
-            메타데이터 기반일 경우 'metadata', 데이터 기반일 경우 'data'를 반환한다.
+            데이터 기반일 경우 'data', 이전 답변 기반일 경우 'others'를 반환한다.
         """
 
         # 데이터 모델 정의
         class Classification(BaseModel):
             """Classification result for user question."""
-            question_classification: Literal["metadata", "data", "others"] = Field(
-                description="""Response 'metadata' if the question is based on chat metadata(e.g. channel id, send time, views etc.), 
-                            'data' if it is based on chat data(e.g. sale contact, recruitment, drug product type, sale place, price, discount event, how to buy etc.),
-                            'others' if it is general question(e.g. greetings, questions based on previous chat history...)"""
+            question_classification: Literal["data", "others"] = Field(
+                description="""Response 'data' if the question is based on data of telegram channel and chats(e.g. channel id, send time, views, sale contact, recruitment, drug product type, sale place, price, discount event, how to buy etc.),
+                               'others' if the question is just only general question(e.g. greetings, questions based on ONLY previous chat history NOT telegram channel or chats...)"""
             )
 
         # LLM 모델 초기화 -> 구조화된 출력을 위한 LLM 설정
@@ -122,19 +162,28 @@ class LangGraphMethods:
                                                 streaming=True).with_structured_output(Classification)
 
         # 분류를 요구하는 프롬프트 템플릿 정의
-        prompt = PromptTemplate(
-            template="""You are a classifier responsible for categorizing user questions. \n 
-                The user asks you about chat data from messanger application.
-                Here is the user question: {question} \n
-                If it is necessary to use metadata to answer the question, classify it as 'metadata'.\n
-                Give a classification 'metadata', 'data' or 'others' to indicate whether the document is based on.
-                Response 'metadata' if the question is based on chat metadata(e.g. channel id, send time, views etc.), 
-                'data' if it is based on chat data(e.g. drug type, sale place, price etc.),
-                'others' if it is general question(e.g. greetings, questions based on previous chat history...)""",
-            input_variables=["question"],
-        )
+        indication = """
+            You are an AI assistant supporting an investigator monitoring illegal drug trafficking activities on Telegram channels.
+            
+            Your role is to classify the user's question into one of two categories: 'data' or 'others'.
+            
+            Instructions:
+            - The user is an investigator asking questions to analyze data from Telegram channels and their chat messages.
+            - Classify the question as 'data' if it pertains to specific information within a channel or its messages.
+              This includes: channel ID, send time, number of views, drug product types, sale location, pricing, promotions, or any chat content.
+            - Classify the question as 'others' **only if** it is a general question unrelated to Telegram channel or message data.
+              For example: greetings, questions based solely on previous answers, or general AI interaction without requiring Telegram data.
+            
+            Output:
+            Return either 'data' or 'others' based strictly on the content of the user's question.
+            Be cautious and conservative — only return 'data' when the question clearly requires analysis of Telegram channel or chat message data.
+        """
 
         # prompt + llm 바인딩 체인 생성
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", indication),
+            ("human", "classify this question: {question}"),
+        ])
         chain = prompt | llm_with_structured_output
 
         # 최초 질문 추출
@@ -144,12 +193,7 @@ class LangGraphMethods:
         classification_result = chain.invoke({"question": question})
 
         # 관련성 여부에 따른 결정
-        if classification_result.question_classification == "metadata":
-            if state.get("debug"):
-                print("\n==== [DECISION: METADATA RELEVANT] ====\n")
-            return "metadata"
-
-        elif classification_result.question_classification == "data":
+        if classification_result.question_classification == "data":
             if state.get("debug"):
                 print("\n==== [DECISION: DATA RELEVANT] ====\n")
             return "data"
@@ -158,125 +202,138 @@ class LangGraphMethods:
                 print("\n==== [DECISION: GENERAL QUESTION RELEVANT] ====\n")
             return "others"
 
-    # 메타데이터 기반 질문에 대응하는 Graph Branch
-    @staticmethod
-    def generate_db_query(state: GraphState, channel_ids: list[int]) -> GraphState:
-        if state.get("debug"):
-            print("\n=== NODE: generate db query ===\n")
-        # LLM 모델 초기화
-        llm = ChatOpenAI(temperature=0, model=MODEL_NAME, streaming=True).with_structured_output(Query)
 
-        # SQL Query 프롬프트 템플릿 정의. 기본적으로 PromptTemplate에서 {}는 사용자 입력으로 인식되기 때문에, {{}}로 escape해야 한다.
-        system_message = """You are a MongoDB manager responsible for answering user questions. 
-            # Database Information: 
-            {database_information}
-            
-            # Your Primary Mission:
-            To retrieve the necessary information from the database to answer a user's question, determine which collection to query and construct the best aggregation pipeline. 
-            Then, provide the result like the following:
-            collection: <collection_name>, 
-            pipeline: [{{appropriate_query}}, {{appropriate_conditions}}, ...]
-            
-            If the user question is asked without specifying a channel ID or any identifying information for a channel, assume that the data should be retrieved from all channels by default.
-            The collection should be only string, which is the name of the collection to query.
-            The aggregation pipeline should be list of JSON, which is directly convertible to JSON. 
-            Both collection and pipeline should be without any Markdown formatting or other unnecessary text.  
-            
-            # Example:
-            For example, if a user asks:
-            "Show me the most viewed chat message in the channels after January 1, 2025."
-            Then your exact response should be:
-            
-            collection: channel_data
-            pipeline: [
-              {{
-                "$match": {{
-                  "timestamp": {{ "$gte": ISODate("2025-01-01T00:00:00Z") }}
-                }}
-              }},
-              {{ "$sort": {{ "views": -1 }} }},
-              {{ "$limit": 1 }}
-            ]
+    @staticmethod
+    def execute_search(state: GraphState, channel_ids: list[int], index_name="TelegramMessages") -> GraphState:
+        if state.get("debug"):
+            print("\n=== NODE: execute_search ===\n")
+
+        @tool
+        def retriever_from_weaviate(
+            query: Optional[str] = None,
+            after: Optional[str] = None,
+            before: Optional[str] = None,
+            keyword: Optional[str] = None,
+        ):
+            """
+            Retrieve relevant Telegram chat messages from a Weaviate vector database, using optional vector similarity search
+            and structured metadata filters.
+
+            This tool supports two modes:
+            1. If a query string is provided, it performs a vector-based `near_text` similarity search.
+            2. If no query is given, it falls back to a metadata-only object fetch using the specified filters.
+
+            Parameters:
+            - query (Optional[str]): The main semantic search string for vector similarity retrieval.
+            - after (Optional[str]): ISO 8601 date string to filter messages sent after this time.
+            - before (Optional[str]): ISO 8601 date string to filter messages sent before this time.
+            - keyword (Optional[str]): A keyword that must be present in the message text.
+
+            Returns:
+            - A formatted string containing relevant documents in XML-like structure, each with context and metadata.
+
+            Use this tool when you want to retrieve chat content relevant to a specific topic, timeframe, or channel
+            from a large corpus of Telegram messages stored in Weaviate.
             """
 
-        prompts = ChatPromptTemplate.from_messages([
-            ("system", system_message),
-            ("user", "{question}"),
+            with WeaviateClientContext() as client:
+                conditions = SearchCondition(
+                    query=query,
+                    after=after,
+                    before=before,
+                    keyword=keyword,
+                )
+                search_text = conditions.query
+                weaviate_filter = build_filter_from_condition(conditions, channel_ids)
+
+                collection = client.collections.get(index_name)
+
+                # near_text or fetch_objects
+                if search_text:
+                    response = collection.query.near_text(
+                        query=search_text,
+                        filters=weaviate_filter,
+                        limit=6
+                    )
+                else:
+                    response = collection.query.fetch_objects(
+                        filters=weaviate_filter,
+                        limit=10
+                    )
+
+                # 결과를 LangChain Document로 변환
+                documents = []
+                for obj in response.objects:
+                    page_content = obj.properties.get("text") or ""
+                    metadata = {
+                        "timestamp": obj.properties.get("timestamp"),
+                        "url": obj.properties.get("url"),
+                        "views": obj.properties.get("views"),
+                    }
+                    documents.append(Document(page_content=page_content, metadata=metadata))
+
+            message = "\n\n".join(
+                f"<document><context>{doc.page_content}</context><metadata>{doc.metadata}</metadata></document>"
+                for doc in documents
+            )
+
+            return message
+
+        llm_with_tools = ChatOpenAI(temperature=0,
+                                    model=MODEL_NAME,
+                                    streaming=True).bind_tools([retriever_from_weaviate],
+                                                               tool_choice=retriever_from_weaviate.name)
+
+        indication = """You are a query interpreter for a Weaviate-based vector search system.
+            Your job is to extract a semantic search query (if any) and a set of structured filters from the user question.
+            Note: 
+            - now is {now}
+            
+            Instructions:
+            - Determine 'query' string if there is a clear topic, subject, or keyword to search semantically.
+            - Only include filters (e.g., channel_id, date range, keyword) **if the user explicitly mentions them** in the question.
+            - DO NOT guess or infer filters that are not clearly and explicitly stated.
+            - If any field is missing or ambiguous, leave it out (use null).
+            
+            Output format:
+              "query": Optional[str],
+              "after": Optional[str],
+              "before": Optional[str],
+              "keyword": Optional[str]
+              
+            Examples:
+                1. question: "이 채널에서 거래되는 마약의 종류와 가격은?"
+                -> "query": "마약 종류 가격", "after": null, "before": null, "keyword": null
+                2. question: "'좌표'가 언급된 2025년 2월 이후의 채팅을 찾아줘"
+                -> "query": null, "after": "2025-02-01T00:00:00.000Z", "before": null, "keyword": "좌표"
+                3. question: "2025년 4월 2일과 27일 사이에 입고 관련 소식이 있었나?"
+                -> "query": "입고", "after": "2025-04-02T00:00:00.000Z", "before": "2025-04-28T00:00:00.000Z", "keyword": null
+            
+            Only return values that are certain and clearly specified by the user.
+            If the user did not mention a filter, DO NOT include it.
+        """
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", indication),
+            ("human", "{question}"),
         ])
+        chain = prompt | llm_with_tools
 
-        # prompt + llm 바인딩 체인 생성
-        chain = prompts | llm
+        ai_msg = chain.invoke({"now": datetime.now(), "question": state["question"]})
 
-        # 최초 질문 추출
-        question = state["question"]
-
-        # 데이터베이스 쿼리 받기
-        query = chain.invoke({"database_information": DB_INFORMATION, "question": question})
-
-        if query.collection == "channel_info":
-            query.pipeline.insert(0, {
-                "$match": {
-                    "_id": {
-                        "$in": channel_ids
-                    }
-                }
-            })
-        else:
-            query.pipeline.insert(0, {
-                "$match": {
-                    "text": {
-                        "$ne": ""
-                    }
-                }
-            })
-            query.pipeline.insert(0, {
-                "$match": {
-                    "channelId": {
-                        "$in": channel_ids
-                    }
-                }
-            })
+        messages = [ai_msg]
+        # 결과를 ToolMessage로 변환
+        for tool_call in ai_msg.tool_calls:
+            selected_tool = {"retriever_from_weaviate": retriever_from_weaviate}[tool_call["name"].lower()]
+            tool_msg = selected_tool.invoke(tool_call)
+            messages.append(tool_msg)
 
         return update_state(state,
-                            node_name="generate_db_query",
-                            db_query=query,
-                            type="metadata",
-                            collection="channel" if query.collection == "channel_info" else "chats")
-
-    @staticmethod
-    def execute_db_query(state: GraphState) -> GraphState:
-        if state.get("debug"):
-            print("\n=== NODE: execute db query ===\n")
-        collection_name, pipeline = state["db_query"].collection, state["db_query"].pipeline
-        cursor = Database.OBJECT[collection_name].aggregate(
-            pipeline)  # state["db_query"].pipeline 은 Pydantic 의 Json 형식으로 지정되었으므로 바로 사용 가능
-        context = [load_from_dict(doc, content_key="text", metadata_keys=["views", "url", "id", "timestamp"]) for doc in
-                   cursor] if collection_name == "channel_data" else list(cursor)
-
-        return update_state(state, node_name="execute_db_query", context=context)
-
-    # 데이터 기반 질문에 대응하는 Graph Branch
-    @staticmethod
-    def execute_retriever(state: GraphState, retriever_tool: Tool) -> GraphState:
-        if state.get("debug"):
-            print("\n=== NODE: execute retriever ===\n")
-        # rewrite_question에서 넘어온 경우에 원래 질문에서 바뀐 다른 새로운 질문을 입력해야 하므로, 현재 상태에서 마지막 메시지(질문) 추출.
-        question = state["messages"][-1].content
-
-        # LLM 모델 초기화
-        model = ChatOpenAI(temperature=0, streaming=True, model=LIGHT_MODEL_NAME)
-
-        # retriever tool 바인딩 & 도구를 호출하는 것을 강제
-        model = model.bind_tools([retriever_tool], tool_choice=retriever_tool.name)
-
-        # 에이전트 응답 생성
-        response = model.invoke(question)
-
-        return update_state(state,
-                            node_name="execute_retriever",
-                            messages=[response],
+                            node_name="execute_search",
+                            messages=messages,
                             type="data",
-                            collection="chats",)
+                            collection="chats",
+                            )
+
 
     @staticmethod
     def handle_error(state: GraphState) -> GraphState:
@@ -291,8 +348,7 @@ class LangGraphMethods:
             print("\n=== NODE: generate ===\n")
 
         if state.get("type") != "others":
-            if state.get("type") == "data":
-                state["context"] = state["messages"][-1].content # retriever tool node의 결과를 context로 저장
+            context = state["messages"][-1].content # tool node의 결과를 context로 저장
             if state.get("collection") == "channel":
                 indication = generate_by_channel
             else:
@@ -314,76 +370,46 @@ class LangGraphMethods:
             rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
 
             # 답변 생성
-            response = rag_chain.invoke({"context": state.get("context", ""), "question": state.get("question", ""), })
+            response = rag_chain.invoke({"context": context, "question": state.get("question", ""), })
         else:
             llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
             # 답변 생성
             response = llm.invoke(state["messages"])
 
-        return update_state(state, node_name="generate", messages=[response],
-                            context="")  # 이전 질문에서 얻어낸 context가 다음 historical 질문에 영향을 주지 않도록 context 초기화
+        return update_state(state, node_name="generate", messages=[response],)
+
 
     def build_graph(self: 'Watson') -> Optional[CompiledStateGraph]:
         if not self.chats:
             return None
 
-        # 도구 초기화
-        retriever_tool = create_retriever_tool(
-            retriever=self.vectorstore.as_retriever(
-                search_kwargs={
-                    "k": 6,
-                    "filters": Filter.any_of([  # Combines the below with `|`
-                        Filter.by_property("channelId").equal(channel_id)
-                        for channel_id in self.channels
-                    ]) # 필터로 채널 ID가 찾는 채널들 안에 있는 객체만 반환하는 retriever 생성
-                }
-            ),  # 6개의 문서 검색,
-            name="retrieve_chats_in_telegram_channel",
-            description="Searches and returns a few chat messages from the Telegram channel that are most relevant to the question.",
-            document_prompt=PromptTemplate.from_template(
-                "<document><context>{page_content}</context><metadata><timestamp>{timestamp}</timestamp><url>{url}</url><views>{views}</views></metadata></document>"
-            ),
-        )
-
-        retriever_tool_node = ToolNode([retriever_tool])
-
         workflow = StateGraph(GraphState)
 
         workflow.add_node("ask_question", self.ask_question)
-        workflow.add_node("generate_db_query", lambda state: self.generate_db_query(state, self.channels))
-        workflow.add_node("execute_db_query", self.execute_db_query)
-        workflow.add_node("execute_retriever", lambda state: self.execute_retriever(state, retriever_tool))
-        workflow.add_node("retrieve", retriever_tool_node)
+        workflow.add_node("classify", self.classify)
+        workflow.add_node("search", lambda state: self.execute_search(state, self.channels))
         workflow.add_node("generate", self.generate)
-        # workflow.add_node("handle_error", handle_error)
 
         # 시작점 설정
         workflow.set_entry_point("ask_question")
         # 첫 분기(메타데이터 기반인지/데이터 기반인지 분류)
         workflow.add_conditional_edges(
             "ask_question",
-            self.classify_question,
+            self.classify,
             {
                 # 조건 출력을 그래프 노드에 매핑
-                "metadata": "generate_db_query",
-                "data": "execute_retriever",
+                "data": "search",
                 "others": "generate",
             }
         )
-
-        # 메타데이터 기반일 경우 Branch
-        workflow.add_edge("generate_db_query", "execute_db_query")
-        workflow.add_edge("execute_db_query", "generate")
-
-        # 데이터 기반일 경우의 Branch
-        workflow.add_edge("execute_retriever", "retrieve")
-        workflow.add_edge("retrieve", "generate")
-
-        # 그래프 종료
+        workflow.add_edge("search", "generate")
         workflow.add_edge("generate", END)
 
+
         logger.debug("Built a new LangGraph Workflow.")
-        return workflow.compile(checkpointer=checkpointer)
+        return workflow.compile(
+            checkpointer=checkpointer
+        )
 
     def _update_graph(self: 'Watson'):
         self.graph = self.build_graph()

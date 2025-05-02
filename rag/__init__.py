@@ -7,7 +7,7 @@ from server.logger import logger
 
 watson_bp = Blueprint('watson', __name__, url_prefix='/watson')
 
-WatsonRegistry.load_existing_bots()
+# WatsonRegistry.load_existing_bots()
 
 @watson_bp.route('/c', methods=['POST'])
 def chat_with_watson():
