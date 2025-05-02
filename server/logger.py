@@ -140,7 +140,6 @@ class ModuleFilter(logging.Filter):
 
         # 현재 환경의 site-packages 경로 (보통 가상환경 안에 있음)
         self.site_packages_path = os.path.abspath(sysconfig.get_paths()["purelib"])
-        print(self.site_packages_path)
 
     def filter(self, record):
         record_path = os.path.abspath(record.pathname)
@@ -153,8 +152,8 @@ class ModuleFilter(logging.Filter):
         if any(record_path.startswith(path) for path in self.allowed_paths):
             return True
 
-        # 3. site-packages 내부라면 필터링 (출력하지 않음)
-        if record_path.lower().startswith(self.site_packages_path.lower()):
+        # 3. site-packages 내부이고 로그 레벨이 WARNING 미만(INFO or DEBUG)이라면 필터링 (출력하지 않음)
+        if record_path.lower().startswith(self.site_packages_path.lower()) and record.levelno < logging.WARNING:
             return False
 
         return True

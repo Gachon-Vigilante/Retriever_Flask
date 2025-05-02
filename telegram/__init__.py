@@ -34,14 +34,13 @@ def connect_channel():
     if response_for_invalid_request := confirm_request(data,
                                                        {
                                                            'channel_key': typing.Union[int, str],
-                                                           'status': typing.Literal["active", "inactive"],
                                                        }):
         return response_for_invalid_request
 
     try:
-        return jsonify(telegram_manager.get_channel_info(data['channel_key'], data['status'])), 200
+        return jsonify(telegram_manager.get_channel_info(data['channel_key'])), 200
     except Exception as e:
-        logger.error(str(e))
+        logger.error(f"{type(e)}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -62,7 +61,7 @@ def scrape_channel():
     try:
         return jsonify(telegram_manager.scrape(channel_key)), 200
     except Exception as e:
-        logger.error(str(e))
+        logger.error(f"{type(e)}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @telegram_bp.route('/channel/check-suspicious', methods=['POST'])
@@ -77,7 +76,7 @@ def check_channel():
     try:
         return jsonify({"suspicious": check_result}), 200
     except Exception as e:
-        logger.error(str(e))
+        logger.error(f"{type(e)}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @telegram_bp.route('/channel/monitoring', methods=['POST'])
@@ -102,5 +101,5 @@ def monitor_channel():
 
         return jsonify({"success": True}), 200
     except Exception as e:
-        logger.error(str(e))
+        logger.error(f"{type(e)}: {str(e)}")
         return jsonify({"error": str(e)}), 500
