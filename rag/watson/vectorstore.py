@@ -1,25 +1,19 @@
-import typing
 import os
-from typing import Optional
-from os.path import exists, join
+import typing
 from datetime import datetime
+from typing import Optional
 
-import faiss
 import weaviate
-from langchain_openai import OpenAIEmbeddings
-from weaviate.classes.query import Filter
 from bson import ObjectId
-from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.document_loaders import MongodbLoader
-from langchain_community.vectorstores import FAISS
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
 from langchain_weaviate import WeaviateVectorStore
-from weaviate.client import WeaviateClient
 from weaviate.classes.config import Configure, Property, DataType
+from weaviate.classes.query import Filter
+from weaviate.client import WeaviateClient
 
 from server.db import get_mongo_connection_string, Database
 from server.logger import logger
-from .constants import vectorstore_dir
 from .weaviate import WeaviateClientContext
 
 if typing.TYPE_CHECKING:
@@ -30,6 +24,10 @@ if typing.TYPE_CHECKING:
 class VectorStoreMethods:
     @staticmethod
     def get_vectorstore(weaviate_client:Optional[WeaviateClient]=None):
+        # 먼저 스키마 등록
+        with WeaviateClientContext() as client:
+            VectorStoreMethods.register_schema(client)
+
         return WeaviateVectorStore(
             client=weaviate_client if weaviate_client else VectorStoreMethods.connect_weaviate(),
             index_name="TelegramMessages",
@@ -72,17 +70,11 @@ class VectorStoreMethods:
                          ], ),
             ]
         )
-
-        response = weaviate_client.collections.list_all()
-
-        print(response)
         logger.info("TelegramMessages schema created in Weaviate.")
 
     def update_vectorstore(self: 'Watson'):
         with WeaviateClientContext() as weaviate_client:
             weaviate_client.connect()
-            # 먼저 스키마 등록
-            self.register_schema(weaviate_client)
             ##### 1. Weaviate에서 channelId 필터로 모든 _id 가져오기 #####
             weaviate_ids: set[str] = set()
 
@@ -174,9 +166,6 @@ class VectorStoreMethods:
             },
             include_db_collection_in_metadata=False, # weaviate의 properties에는 database, collection 필드를 지정하지 않았음. 즉 여기서도 제외해야 함.
         )
-
-    def get_vectorstore_folder_path(self: 'Watson'):
-        return join(vectorstore_dir, str(self.id))
 
 
 from bson import ObjectId
