@@ -127,30 +127,61 @@ Be cautious and conservative — only return 'data' when the question clearly re
     class Interpret:
         WEAVIATE = """
 You are a query interpreter for a Weaviate-based vector search system.
-Your job is to extract a semantic search query (if any) and a set of structured filters from the user question.
-Note: 
-- now is {now}
 
-Instructions:
-- Determine 'query' string if there is a clear topic, subject, or keyword to search semantically.
-- Only include filters (e.g., channel_id, date range, keyword) **if the user explicitly mentions them** in the question.
-- DO NOT guess or infer filters that are not clearly and explicitly stated.
-- If any field is missing or ambiguous, leave it out (use null).
+# Your job is to extract:
+1. A semantic search query (optional)
+2. A nested logical filter structure (optional, but must follow Weaviate constraints)
+3. Sorting preferences (optional)
+4. Result limit (optional)
+
+# Rules and Constraints:
+- Only include information that is **explicitly mentioned** in the question.
+- Do **not guess** missing information.
+- Weaviate does **not support** logical negation (no "not" allowed).
+- You may only use the following fields for filtering or sorting:
+  - **text** (type: TEXT)
+  - **views** (type: INT)
+  - **timestamp** (type: DATE)
+- Other fields must not be used in filters or sort.
+- Allowed filter operators: 
+  - "eq", "neq", "gt", "gte", "lt", "lte", "like", "contains_any", "contains_all", "isnull"
+- Sort must be a list of {{ "field": str, "direction": "asc" or "desc" }} using only the fields above.
+- If no limit is specified, set "limit" to `null` (Python will default to 10).
 
 Output format:
+{{
   "query": Optional[str],
-  "after": Optional[str],
-  "before": Optional[str],
-  "keyword": Optional[str]
-  
-Examples:
-    1. question: "이 채널에서 거래되는 마약의 종류와 가격은?"
-    -> "query": "마약 종류 가격", "after": null, "before": null, "keyword": null
-    2. question: "'좌표'가 언급된 2025년 2월 이후의 채팅을 찾아줘"
-    -> "query": null, "after": "2025-02-01T00:00:00.000Z", "before": null, "keyword": "좌표"
-    3. question: "2025년 4월 2일과 27일 사이에 입고 관련 소식이 있었나?"
-    -> "query": "입고", "after": "2025-04-02T00:00:00.000Z", "before": "2025-04-28T00:00:00.000Z", "keyword": null
+  "filters": Optional[LogicalFilter],
+  "sort": Optional[list[{{"field": str, "direction": str}}]],
+  "limit": Optional[int]
+}}
 
-Only return values that are certain and clearly specified by the user.
-If the user did not mention a filter, DO NOT include it.
+LogicalFilter is one of:
+- {{ "and": [LogicalFilter, ...] }}
+- {{ "or": [LogicalFilter, ...] }}
+- {{ "field": str, "op": str, "value": Any }}
+
+Examples:
+1. question: "2025년 4월 이후 조회수 높은 메시지 3개 보여줘"
+->
+    "query": null,
+    "filters": [
+    {{ "field": "timestamp", "op": "gte", "value": "2025-04-01T00:00:00Z" }}
+    ],
+    "sort": [{{ "field": "views", "direction": "desc" }}],
+    "limit": 3
+
+2. question: "'좌표'나 '링크'가 들어간 텍스트를 시간순으로 정렬해서 보여줘"
+->
+    "query": null,
+    "filters": {{
+      "or": [
+        {{ "field": "text", "op": "like", "value": "*좌표*" }},
+        {{ "field": "text", "op": "like", "value": "*링크*" }}
+      ]
+    }},
+    "sort": [{{ "field": "timestamp", "direction": "asc" }}],
+    "limit": null
+
+Return only the fields listed above. If anything is unclear or not explicitly requested, omit it or set to null.
 """

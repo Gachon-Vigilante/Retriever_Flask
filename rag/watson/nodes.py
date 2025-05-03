@@ -1,13 +1,14 @@
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal, Optional, List
 
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langchain_teddynote.models import get_model_name, LLMs
-from weaviate.classes.query import Filter
+from weaviate.classes.query import Filter, Sort
 
+from utils import dict_to_xml
 from .datamodel import GraphState, SearchCondition, Classification
 from .indications import Indications
 from .weaviate import WeaviateClientContext
@@ -21,24 +22,55 @@ def update_state(state: GraphState, node_name: str, **updates) -> GraphState:
     new_state.update(**updates)
     return new_state
 
-def build_filter_from_condition(cond: SearchCondition, channel_ids: list[int]):
-    filters = [
-        Filter.any_of([
-            Filter.by_property("channelId").equal(channel_id)
-            for channel_id in channel_ids
-        ])
-    ]
-    if cond.keyword:
-        filters.append(Filter.by_property("text").like(f"*{cond.keyword}*"))
-    if cond.after:
-        filters.append(Filter.by_property("timestamp").greater_or_equal(cond.after))
-    if cond.before:
-        filters.append(Filter.by_property("timestamp").less_or_equal(cond.before))
+def parse_filter_node(node: dict):
+    if "and" in node:
+        return Filter.all_of([parse_filter_node(sub) for sub in node["and"]])
+    if "or" in node:
+        return Filter.any_of([parse_filter_node(sub) for sub in node["or"]])
+    if "field" in node and "op" in node:
+        field = node["field"]
+        op = node["op"]
+        value = node["value"]
+        base = Filter.by_property(field)
 
-    if len(filters) == 1:
-        return filters[0]
-    else:
-        return Filter.all_of(filters)
+        match op:
+            case "eq": return base.equal(value)
+            case "neq": return base.not_equal(value)
+            case "gt": return base.greater_than(value)
+            case "gte": return base.greater_or_equal(value)
+            case "lt": return base.less_than(value)
+            case "lte": return base.less_or_equal(value)
+            case "like": return base.like(value)
+            case "contains_any": return base.contains_any(value)
+            case "contains_all": return base.contains_all(value)
+            case "isnull": return base.is_none(value)
+            case _: raise ValueError(f"Unsupported operator: {op}")
+
+    raise ValueError("Invalid filter node structure")
+
+def parse_sort_list(sort_json: list[dict]):
+    """
+        Converts a list of sort conditions into a chained Sort object.
+
+        Each element in sort_json must be a dict like:
+            { "field": "views", "direction": "desc" }
+
+        Returns:
+            Sort object with multiple fields chained via .by_property()
+    """
+    sort_obj = None
+    for i, item in enumerate(sort_json):
+        if i == 0:
+            sort_obj = Sort.by_property(
+                name=item["field"],
+                ascending=(item["direction"] == "asc")
+            )
+        else:
+            sort_obj = sort_obj.by_property(
+                name=item["field"],
+                ascending=(item["direction"] == "asc")
+            )
+    return sort_obj
 
 class LangGraphNodes:
     # Root Nodes
@@ -97,55 +129,78 @@ class LangGraphNodes:
 
         @tool
         def retriever_from_weaviate(
-                query: Optional[str] = None,
-                after: Optional[str] = None,
-                before: Optional[str] = None,
-                keyword: Optional[str] = None,
+            query: Optional[str] = None,
+            filters: Optional[dict] = None,
+            sort: Optional[list[dict]] = None,
+            limit: Optional[int] = 10
         ):
             """
-            Retrieve relevant Telegram chat messages from a Weaviate vector database, using optional vector similarity search
-            and structured metadata filters.
+            Retrieves relevant Telegram chat messages from a Weaviate collection using semantic query and structured filters.
 
-            This tool supports two modes:
-            1. If a query string is provided, it performs a vector-based `near_text` similarity search.
-            2. If no query is given, it falls back to a metadata-only object fetch using the specified filters.
+            This tool supports both vector-based similarity search (`near_text`) and traditional metadata-based filtering
+            (`fetch_objects`) depending on whether a semantic query is provided.
 
             Parameters:
-            - query (Optional[str]): The main semantic search string for vector similarity retrieval.
-            - after (Optional[str]): ISO 8601 date string to filter messages sent after this time.
-            - before (Optional[str]): ISO 8601 date string to filter messages sent before this time.
-            - keyword (Optional[str]): A keyword that must be present in the message text.
+            - query (Optional[str]): A semantic search string. If provided, vector similarity (`near_text`) is used.
+            - filters (Optional[dict]): A nested filter structure in JSON format specifying logical conditions for message retrieval.
+                Must use only allowed fields: "text", "views", "timestamp".
+                Logical operators supported: "and", "or". Not supported: "not".
+                Comparison operators: "eq", "neq", "gt", "gte", "lt", "lte", "like", "contains_any", "contains_all", "isnull".
+            - sort (Optional[List[dict]]): A list of sorting preferences. Each element must include:
+                - "field": one of ["text", "views", "timestamp"]
+                - "direction": "asc" (ascending) or "desc" (descending)
+            - limit (int): Maximum number of results to return. If unspecified, defaults to 10.
+
+            Behavior:
+            - If `query` is provided, performs vector search using `near_text`.
+            - If `query` is not provided, performs metadata-only filtering using `fetch_objects`.
+            - Regardless of mode, results are always filtered by the allowed `channel_ids` via an internal OR condition.
+            - Results are returned as XML-like formatted string for downstream processing.
 
             Returns:
-            - A formatted string containing relevant documents in XML-like structure, each with context and metadata.
-
-            Use this tool when you want to retrieve chat content relevant to a specific topic, timeframe, or channel
-            from a large corpus of Telegram messages stored in Weaviate.
+            - A string of chat documents, each formatted as:
+              <document>
+                <context>{chat_text}</context>
+                <metadata>
+                    <timestamp>...</timestamp>
+                    <url>...</url>
+                    <views>...</views>
+                </metadata>
+              </document>
             """
+            limit = limit or 10
+            channel_id_filter = {
+                "or": [
+                    {"field": "channelId", "op": "eq", "value": channel_id}
+                    for channel_id in channel_ids
+                ]
+            }
+
+            filters = {
+                "and": [
+                    filters,
+                    channel_id_filter
+                ]
+            } if filters else channel_id_filter
 
             with WeaviateClientContext() as client:
-                conditions = SearchCondition(
-                    query=query,
-                    after=after,
-                    before=before,
-                    keyword=keyword,
-                )
-                search_text = conditions.query
-                weaviate_filter = build_filter_from_condition(conditions, channel_ids)
-
+                filter_obj = parse_filter_node(filters) if filters else None
+                sort_obj = parse_sort_list(sort) if sort else None
                 collection = client.collections.get(index_name)
 
                 # near_text or fetch_objects
-                if search_text:
+                if query:
                     response = collection.query.near_text(
-                        query=search_text,
-                        filters=weaviate_filter,
-                        limit=6
+                        query=query,
+                        filters=filter_obj,
+                        # sort: 벡터 검색 수행 시에는 sort 인자는 사용 불가!
+                        limit=limit
                     )
                 else:
                     response = collection.query.fetch_objects(
-                        filters=weaviate_filter,
-                        limit=10
+                        filters=filter_obj,
+                        sort=sort_obj,
+                        limit=limit
                     )
 
                 # 결과를 LangChain Document로 변환
@@ -160,7 +215,7 @@ class LangGraphNodes:
                     documents.append(Document(page_content=page_content, metadata=metadata))
 
             message = "\n\n".join(
-                f"<document><context>{doc.page_content}</context><metadata>{doc.metadata}</metadata></document>"
+                f"<document><context>{doc.page_content}</context><metadata>{dict_to_xml(doc.metadata)}</metadata></document>"
                 for doc in documents
             )
 
@@ -226,7 +281,7 @@ class LangGraphNodes:
             # StrOutParser()를 사용하면 결과가 문자열이 되어서 state["messages"]에 추가될 때 자동으로 HumanMessage로 타입이 변환되기 때문에,
             # Memory에 저장 후 AI에게 제공해도 AI가 이를 AI의 응답으로 인식하지 못한다.
             # 따라서 StrOutputParser는 사용하지 말자.
-            rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
+            rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0.3, streaming=True)
 
             # 답변 생성
             response = rag_chain.invoke({"context": context, "question": state.get("question", ""), })

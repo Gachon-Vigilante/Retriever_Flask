@@ -143,12 +143,13 @@ class VectorStoreMethods:
 
                         # chatbot collection에서 chatIds를 수집된 채팅의 ID로 업데이트
                         logger.debug(f"Updating chatbot metadata. Channel IDs: {self.channels}, scope: {self.scope}")
-                        self.update_db() # MongoDB에서 현재 챗봇의 정보 업데이트 (없을 경우 신규 생성)
                         self._update_graph()
 
             if weaviate_client.batch.failed_objects:
                 for failed in weaviate_client.batch.failed_objects:
                     logger.error(f"Failed to insert documents into weaviate: {failed}")
+
+            self.update_db()  # MongoDB에서 현재 챗봇의 정보 업데이트 (없을 경우 신규 생성)
 
 
     @staticmethod

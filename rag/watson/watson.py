@@ -98,10 +98,9 @@ class Watson(VectorStoreMethods, LangGraphMethods, MongoDBMethods, MemoryMethods
             query = {"text": {"$ne": ""}} if scope == self.GLOBAL else {"channelId": channel_id, "text": {"$ne": ""}}
             self.chats.extend([chat['_id'] for chat in chat_collection.find(query) if chat['_id'] not in self.chats])
         self.update_vectorstore()
+        self._update_graph()
 
         if not getattr(self, "initialized", False):
-            self._update_graph()
-
             WatsonRegistry.register(self)
             logger.info(f"메모리에 챗봇을 등록했습니다. ID: {self.id}, channel IDs: {self.channels}")
 
