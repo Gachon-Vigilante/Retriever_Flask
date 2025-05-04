@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Literal, Optional, List
+from datetime import datetime, timezone
+from typing import Literal, Optional
 
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
@@ -9,7 +9,8 @@ from langchain_teddynote.models import get_model_name, LLMs
 from weaviate.classes.query import Filter, Sort
 
 from utils import dict_to_xml
-from .datamodel import GraphState, SearchCondition, Classification
+from .constants import channel_collection
+from .datamodel import GraphState, Classification
 from .indications import Indications
 from .weaviate import WeaviateClientContext
 
@@ -129,7 +130,7 @@ class LangGraphNodes:
 
         @tool
         def retriever_from_weaviate(
-            query: Optional[str] = None,
+            query: Optional[list[str]] = None,
             filters: Optional[dict] = None,
             sort: Optional[list[dict]] = None,
             limit: Optional[int] = 10
@@ -168,7 +169,7 @@ class LangGraphNodes:
                 </metadata>
               </document>
             """
-            limit = limit or 10
+            limit = min(20, limit) if limit else 8
             channel_id_filter = {
                 "or": [
                     {"field": "channelId", "op": "eq", "value": channel_id}
@@ -208,6 +209,7 @@ class LangGraphNodes:
                 for obj in response.objects:
                     page_content = obj.properties.get("text") or ""
                     metadata = {
+                        "channel id": obj.properties.get("channelId"),
                         "timestamp": obj.properties.get("timestamp"),
                         "url": obj.properties.get("url"),
                         "views": obj.properties.get("views"),
@@ -233,7 +235,7 @@ class LangGraphNodes:
         ])
         chain = prompt | llm_with_tools
 
-        ai_msg = chain.invoke({"now": datetime.now(), "question": state["question"]})
+        ai_msg = chain.invoke({"now": datetime.now(tz=timezone.utc).isoformat(), "question": state["question"]})
 
         messages = [ai_msg]
         # 결과를 ToolMessage로 변환
@@ -246,7 +248,6 @@ class LangGraphNodes:
                             node_name="execute_search",
                             messages=messages,
                             type="data",
-                            collection="chats",
                             )
 
     @staticmethod
@@ -257,22 +258,20 @@ class LangGraphNodes:
 
     # 모든 것이 검증된 후 context를 기반으로 답변을 생성하는 Graph Branch
     @staticmethod
-    def generate(state: GraphState) -> GraphState:
+    def generate(state: GraphState, channel_info: dict) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: generate ===\n")
 
         if state.get("type") != "others":
             context = state["messages"][-1].content  # tool node의 결과를 context로 저장
-            if state.get("collection") == "channel":
-                indication = Indications.Generate.BY_CHANNEL
-            else:
-                indication = Indications.Generate.BY_CHATS  # type이 "chats"일 때
+            indication = Indications.Generate.BY_CHATS  # type이 "chats"일 때
 
             # 기존 state["messages"]에 새로운 지시와 질문을 더해서 같이 제공한다.
             # memory를 설정하면 state["messages"]에 계속해서 대화 기록이 저장되기 때문에,
             # 이를 AI가 받아서 이전 채팅 기록에 근거한 답변을 생성할 수 있게 된다.
             prompt = ChatPromptTemplate.from_messages([
-                *state["messages"],
+                # 최대 25개 대화 메세지를 기억으로 저장. toolmessage 등도 다 반영되기 때문에 실제로는 10번 정도의 질의응답 상호작용을 기억할 것.
+                *(state["messages"][-min(len(state["messages"]), 50):]),
                 ("system", indication),
                 ("human", "{question}"),
             ])
@@ -281,13 +280,17 @@ class LangGraphNodes:
             # StrOutParser()를 사용하면 결과가 문자열이 되어서 state["messages"]에 추가될 때 자동으로 HumanMessage로 타입이 변환되기 때문에,
             # Memory에 저장 후 AI에게 제공해도 AI가 이를 AI의 응답으로 인식하지 못한다.
             # 따라서 StrOutputParser는 사용하지 말자.
-            rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0.3, streaming=True)
+            rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
 
             # 답변 생성
-            response = rag_chain.invoke({"context": context, "question": state.get("question", ""), })
+            response = rag_chain.invoke({"question": state.get("question", ""),
+                                         "channel_information": channel_info
+                                         })
         else:
             llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
             # 답변 생성
             response = llm.invoke(state["messages"])
 
-        return update_state(state, node_name="generate", messages=[response], )
+        return update_state(state,
+                            node_name="generate",
+                            messages=[response], )

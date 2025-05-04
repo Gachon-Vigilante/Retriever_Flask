@@ -32,12 +32,8 @@ class GraphState(TypedDict):
     # add_messages reducer 함수를 사용하여 메시지 시퀀스를 관리
     messages: Annotated[Sequence[BaseMessage], add_messages]
     question: Annotated[str, "Question"]  # 질문
-    db_query: Annotated[Query, "Query"]  # 데이터베이스 쿼리
-    answer: Annotated[str, "Answer"]  # 답변
     debug: Annotated[bool, "Debug"]
     type: Annotated[Literal["data", "others"], "Type"]
-    collection: Annotated[Literal["channel", "chats"], "Type"]
-
 
 
 class SearchCondition(BaseModel):

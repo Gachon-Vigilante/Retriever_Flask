@@ -27,7 +27,7 @@ class LangGraphMethods:
         workflow.add_node("ask_question", LangGraphNodes.ask_question)
         workflow.add_node("classify", LangGraphNodes.classify)
         workflow.add_node("search", lambda state: LangGraphNodes.execute_search(state, self.channels))
-        workflow.add_node("generate", LangGraphNodes.generate)
+        workflow.add_node("generate", lambda state: LangGraphNodes.generate(state, self.get_channel_info()))
 
         # 시작점 설정
         workflow.set_entry_point("ask_question")
