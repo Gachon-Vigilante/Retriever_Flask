@@ -11,8 +11,8 @@ from weaviate.classes.query import Filter, Sort
 from server.db import Database
 from utils import dict_to_xml
 from .constants import weaviate_index_name
-from .datamodel import GraphState, Classification
-from .indications import Indications
+from ai.datamodel import GraphState, Classification
+from ai.indications import Indications
 from .weaviate import WeaviateClientContext
 
 # 최신 모델이름 가져오기

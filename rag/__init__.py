@@ -3,7 +3,6 @@ from typing import Literal
 
 from utils import confirm_request
 from .watson import Watson, WatsonRegistry
-from .watson.catalog import update_catalog
 from server.logger import logger
 
 watson_bp = Blueprint('watson', __name__, url_prefix='/watson')
@@ -45,17 +44,3 @@ def ask_watson(bot, data):
         return jsonify({"answer": f"죄송합니다. 에러가 발생했습니다. 시스템, 또는 AI를 제공하는 외부 API의 문제일 수 있습니다."}), 500
 
 
-@watson_bp.route('/catalog', methods=['POST'])
-def write_catalog():
-    """특정 채널의 가격 정보를 추가로 추출해서 저장한다."""
-    data = request.json
-    try:
-        if response_for_invalid_request := confirm_request(data, {
-            'channel_id': int,
-        }):
-            return response_for_invalid_request
-        update_catalog(data['channel_id'])
-        return jsonify({"success": True}), 200
-    except Exception as e:
-        logger.error(e)
-        return jsonify({"error": e}), 500

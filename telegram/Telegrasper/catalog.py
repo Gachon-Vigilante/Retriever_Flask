@@ -6,8 +6,8 @@ from server.db import Database
 from server.logger import logger
 from utils import dict_to_xml
 from langchain_openai import ChatOpenAI
-from .indications import Indications
-from .datamodel import Catalog
+from ai.indications import Indications
+from ai.datamodel import Catalog
 
 
 def get_catalog(channel_id: int) -> dict[str, Union[list[int], str]]:

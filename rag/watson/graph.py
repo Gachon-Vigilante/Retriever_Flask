@@ -8,7 +8,7 @@ from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from server.logger import logger
-from .datamodel import GraphState
+from ai.datamodel import GraphState
 from .memory import checkpointer
 from .nodes import LangGraphNodes
 
