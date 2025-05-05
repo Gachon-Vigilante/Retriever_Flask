@@ -26,6 +26,8 @@ attrs==25.3.0
     #   aiohttp
     #   outcome
     #   trio
+authlib==1.3.1
+    # via weaviate-client
 beautifulsoup4==4.13.4
     # via -r requirements.in
 blinker==1.9.0
@@ -40,7 +42,9 @@ certifi==2025.1.31
     #   requests
     #   selenium
 cffi==1.17.1
-    # via trio
+    # via
+    #   cryptography
+    #   trio
 charset-normalizer==3.4.1
     # via requests
 click==8.1.8
@@ -54,6 +58,8 @@ colorama==0.4.6
     #   tqdm
 contourpy==1.3.2
     # via matplotlib
+cryptography==44.0.2
+    # via authlib
 cycler==0.12.1
     # via matplotlib
 dataclasses-json==0.6.7
@@ -66,6 +72,8 @@ deep-sort-realtime==1.3.2
     # via -r requirements.in
 deepl==1.21.1
     # via langchain-teddynote
+deprecation==2.1.0
+    # via weaviate-client
 distro==1.9.0
     # via
     #   anthropic
@@ -76,8 +84,6 @@ et-xmlfile==2.0.0
     # via openpyxl
 executing==2.2.0
     # via stack-data
-faiss-cpu==1.10.0
-    # via -r requirements.in
 feedparser==6.0.11
     # via langchain-teddynote
 filelock==3.18.0
@@ -130,7 +136,15 @@ googleapis-common-protos==1.70.0
 greenlet==3.2.0
     # via sqlalchemy
 grpcio==1.71.0
-    # via pinecone-client
+    # via
+    #   grpcio-health-checking
+    #   grpcio-tools
+    #   pinecone-client
+    #   weaviate-client
+grpcio-health-checking==1.71.0
+    # via weaviate-client
+grpcio-tools==1.71.0
+    # via weaviate-client
 h11==0.14.0
     # via
     #   httpcore
@@ -144,6 +158,7 @@ httpx==0.28.1
     #   langsmith
     #   openai
     #   tavily-python
+    #   weaviate-client
 httpx-sse==0.4.0
     # via langchain-community
 huggingface-hub==0.30.2
@@ -201,6 +216,7 @@ langchain-core==0.3.52
     #   langchain-community
     #   langchain-openai
     #   langchain-text-splitters
+    #   langchain-weaviate
     #   langgraph
     #   langgraph-checkpoint
     #   langgraph-prebuilt
@@ -210,6 +226,8 @@ langchain-teddynote==0.3.45
     # via -r requirements.in
 langchain-text-splitters==0.3.8
     # via langchain
+langchain-weaviate==0.0.4
+    # via -r requirements.in
 langgraph==0.3.30
     # via langchain-teddynote
 langgraph-checkpoint==2.0.24
@@ -270,9 +288,9 @@ numpy==1.26.4
     #   -r requirements.in
     #   contourpy
     #   deep-sort-realtime
-    #   faiss-cpu
     #   kiwipiepy
     #   langchain-community
+    #   langchain-weaviate
     #   matplotlib
     #   opencv-python
     #   pandas
@@ -311,7 +329,7 @@ outcome==1.3.0.post0
     #   trio-websocket
 packaging==24.2
     # via
-    #   faiss-cpu
+    #   deprecation
     #   huggingface-hub
     #   langchain-core
     #   langsmith
@@ -351,6 +369,8 @@ protobuf==5.29.4
     # via
     #   google-api-core
     #   googleapis-common-protos
+    #   grpcio-health-checking
+    #   grpcio-tools
     #   pinecone-client
     #   proto-plus
     #   protoc-gen-openapiv2
@@ -381,6 +401,7 @@ pydantic==2.11.3
     #   langsmith
     #   openai
     #   pydantic-settings
+    #   weaviate-client
 pydantic-core==2.33.1
     # via pydantic
 pydantic-settings==2.8.1
@@ -469,6 +490,8 @@ sentencepiece==0.2.0
     # via -r requirements.in
 sgmllib3k==1.0.0
     # via feedparser
+simsimd==6.2.1
+    # via langchain-weaviate
 six==1.17.0
     # via python-dateutil
 sniffio==1.3.1
@@ -567,8 +590,14 @@ urllib3[socks]==2.4.0
     #   requests
     #   selenium
     #   types-requests
+validators==0.34.0
+    # via weaviate-client
 wcwidth==0.2.13
     # via prompt-toolkit
+weaviate-client==4.14.1
+    # via
+    #   -r requirements.in
+    #   langchain-weaviate
 websocket-client==1.8.0
     # via selenium
 werkzeug==3.1.3

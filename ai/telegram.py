@@ -165,4 +165,3 @@ Return a list of such reports under `reports` property.
     # 결과 수신
     intelligence = chain.invoke({"message": message})
     return intelligence.reports
-
