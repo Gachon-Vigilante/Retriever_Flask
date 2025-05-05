@@ -240,7 +240,7 @@ class LangGraphNodes:
                 A concatenated XML-style string with one <document> block per channel, each containing:
                 <channel_id>...</channel_id>
                 <catalog>...</catalog>
-                <source>...</source>
+                <sources>...</sources>
 
             This output is designed to be read by an AI model or investigator for reviewing summarized pricing intelligence per channel.
             """
@@ -256,7 +256,7 @@ class LangGraphNodes:
                     doc += f"</document>"
             return doc
 
-        llm_with_tools = ChatOpenAI(temperature=0.5,
+        llm_with_tools = ChatOpenAI(temperature=0,
                                     model=MODEL_NAME,
                                     streaming=True).bind_tools([retriever_from_weaviate, get_drug_pricing_information])
 
