@@ -43,3 +43,18 @@ class SearchCondition(BaseModel):
     after: Optional[str] = Field(None, description="ISO date string for filtering messages after a time.")
     before: Optional[str] = Field(None, description="ISO date string for filtering messages before a time.")
     keyword: Optional[str] = Field(None, description="A keyword that should appear in the document.")
+
+
+class Catalog(BaseModel):
+    chatIds: list[int] = Field(
+        description="""
+        list of chatIds which are Telegram chat messages that appear to contain information about **drug pricing**.
+        """
+    )
+    catalog: str = Field(
+        description="""
+        A well-formatted summary of drug pricing information extracted from the referenced chat messages.
+        This should organize the data by product type, price, and any relevant units (e.g., grams, milliliters, packs).
+        The result should be human-readable, concise, and categorized by drug type or sale format if possible.
+        """
+    )

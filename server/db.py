@@ -34,6 +34,7 @@ class Database:
         POST_HTML: Collection = db_object["post_html"]
         POST_CLUSTERS: Collection = db_object["post_clusters"]
         POST_SIMILARITY: Collection = db_object["post_similarity"]
+        REPORTS: Collection = db_object["reports"]
 
     OBJECT = db_object
     NAME = db_name
