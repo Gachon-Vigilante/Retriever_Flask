@@ -15,11 +15,10 @@ from weaviate.client import WeaviateClient
 from server.db import get_mongo_connection_string, Database
 from server.logger import logger
 from .weaviate import WeaviateClientContext
+from .constants import weaviate_index_name
 
 if typing.TYPE_CHECKING:
     from rag.watson import Watson
-
-
 
 class VectorStoreMethods:
     @staticmethod
@@ -30,8 +29,7 @@ class VectorStoreMethods:
 
         return WeaviateVectorStore(
             client=weaviate_client if weaviate_client else VectorStoreMethods.connect_weaviate(),
-            index_name="TelegramMessages",
-            embedding=OpenAIEmbeddings(),
+            index_name=weaviate_index_name,
             text_key="text",
         )
 
@@ -39,19 +37,20 @@ class VectorStoreMethods:
     def connect_weaviate() -> WeaviateClient:
         return weaviate.connect_to_local(
             headers={
-                "X-OpenAI-Api-Key": os.getenv("OPENAI_API_KEY")
+                "X-OpenAI-Api-Key": os.getenv("OPENAI_API_KEY"),
+                "X-HuggingFace-Api-Key": os.getenv("HUGGINGFACE_API_KEY"),
             },
         )
 
     @staticmethod
     def register_schema(weaviate_client: WeaviateClient) -> None:
         # 먼저 클래스가 존재하는지 확인
-        if "TelegramMessages" in weaviate_client.collections.list_all().keys():
+        if weaviate_index_name in weaviate_client.collections.list_all().keys():
             logger.info("TelegramMessages already exists in Weaviate.")
             return
 
         weaviate_client.collections.create(
-            "TelegramMessages",
+            weaviate_index_name,
             description="Telegram channel messages with metadata",
             vectorizer_config=Configure.Vectorizer.text2vec_openai(),
             properties=[  # properties configuration is optional
@@ -79,7 +78,7 @@ class VectorStoreMethods:
             weaviate_ids: set[str] = set()
 
             for channel_id in self.channels:
-                collection = weaviate_client.collections.get("TelegramMessages")
+                collection = weaviate_client.collections.get(weaviate_index_name)
                 response = collection.query.fetch_objects(
                     filters=Filter.by_property("channelId").equal(channel_id),
                     limit=10000, # 10000이 최대인듯. 100000으로 하면 query maximum result exceeded 오류 발생

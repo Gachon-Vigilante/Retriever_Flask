@@ -119,13 +119,13 @@ LogicalFilter is one of:
 If an invalid operator is used with a field (e.g., `like` on `timestamp`), reject that condition or omit it entirely.
 
 Examples:
-1. question: question: "2025년 4월 1일부터 2025년 5월 1일 사이에 올라온 조회수 높은 메시지 3개 보여줘"
+1. question: question: "2025년 4월 1일부터 2025년 5월 1일까지 올라온 조회수 높은 메시지 3개 보여줘"
 ->
     "query": null,
     "filters": {{
       "and": [
         {{ "field": "timestamp", "op": "gte", "value": "2025-04-01T00:00:00Z" }},
-        {{ "field": "timestamp", "op": "lte", "value": "2025-05-01T00:00:00Z" }}
+        {{ "field": "timestamp", "op": "lt", "value": "2025-05-02T00:00:00Z" }}
       ] 
     }},
     "sort": [{{ "field": "views", "direction": "desc" }}],
@@ -143,14 +143,60 @@ Examples:
     "sort": [{{ "field": "timestamp", "direction": "asc" }}],
     "limit": null
 
-3. question: "이 채널에서 거래되는 마약의 종류와 가격대가 궁금해"
-->
-{{
-  "query": ["가격", "종류"],
-  "filters": null,
-  "sort": null,
-  "limit": null
-}}
 
 Return only the fields listed above. If anything is unclear or not explicitly requested, omit it or set to null.
+
+# Special case – Price-related queries:
+If the user's question is about price, price range, or payment amount (e.g., contains terms like "가격", "가격대", "금액", "얼마", "비용", etc.),
+**do not attempt to generate filters or perform vector search.**
+
+Instead, a dedicated tool for price intelligence should be called.
+
+This is because questions about drug pricing require deeper structured reasoning and catalog-style summarization, which is better handled by a specialized tool rather than raw retrieval.
+"""
+    class Extract:
+        CATALOG = """
+You are an AI assistant supporting an investigator monitoring illegal drug transactions on Telegram.
+
+Your task is to examine a list of Telegram chat messages and identify which ones appear to contain information about **drug pricing**, 
+and to summarize that information in a structured text format.
+
+Your goals are:
+1. Identify messages that contain **drug pricing information**, and return their `id`s in a list of integers.
+2. From the selected messages, generate a human-readable summary (`catalog`) that organizes the drug pricing data clearly.
+
+Pricing information may include:
+- Explicit numeric prices (e.g., "20만", "15만원", "3k", "300000")
+- Units associated with quantity (e.g., "0.5g", "1ml", "2통", "1지", "3팟")
+- Pricing terms (e.g., "가격", "금액", "판매가", "구매가", "원", "만", "할인가")
+- Discount or promotion context (e.g., "이벤트", "특가", "할인", "1+1")
+
+Instructions:
+- Be cautious and conservative. Only include messages where you are reasonably confident they refer to **drug pricing**.
+- The `catalog` should be neatly structured and group prices by product or context where possible.
+- Include units and pricing (e.g., "떨: 4g = 20만원", "캔디: 1정 = 5만", "떨 특가: 3g에 2g 추가 증정").
+- Answer in Korean.
+
+Note:
+In Telegram-based drug trafficking messages, various slang terms are used to represent quantity units. Please interpret them as follows:
+
+1. **"지"**: Refers to grams (g), a unit of weight for solid drugs.
+   - "1지" means "1g"
+   - "반지" means "0.5g"
+
+2. **"팟" / "pod"**: Refers to a container (pod or cartridge) of **liquid drugs** (e.g., THC oil, "떨액", "브액").
+   - "1팟" or "1 pod" means one pod (unit of volume/package)
+
+3. **"정"**: Refers to a pill or tablet, commonly used for MDMA or ecstasy ("캔디").
+   - "필" and "탭" are interchangeable slang terms for one "정"
+   - For example, "3탭", "2필" both mean 3 tablets / 2 tablets
+
+When interpreting drug pricing and quantity, apply these equivalencies to standardize the units. This helps detect actual product quantity, pricing structure, and comparisons across products.
+
+
+Example output format:
+{{
+  "chatIds": [2, 42, 117],
+  "catalog": "- 아이스: 1g = 15만원\n- 브액: 1통 = 5만\n- 이벤트: 아이스 2g + 1g 무료 (총 3g, 25만)"
+}}
 """

@@ -8,8 +8,9 @@ from langchain_openai import ChatOpenAI
 from langchain_teddynote.models import get_model_name, LLMs
 from weaviate.classes.query import Filter, Sort
 
+from server.db import Database
 from utils import dict_to_xml
-from .constants import channel_collection
+from .constants import weaviate_index_name
 from .datamodel import GraphState, Classification
 from .indications import Indications
 from .weaviate import WeaviateClientContext
@@ -124,7 +125,7 @@ class LangGraphNodes:
             return "others"
 
     @staticmethod
-    def execute_search(state: GraphState, channel_ids: list[int], index_name="TelegramMessages") -> GraphState:
+    def execute_search(state: GraphState, channel_ids: list[int], index_name=weaviate_index_name) -> GraphState:
         if state.get("debug"):
             print("\n=== NODE: execute_search ===\n")
 
@@ -134,7 +135,7 @@ class LangGraphNodes:
             filters: Optional[dict] = None,
             sort: Optional[list[dict]] = None,
             limit: Optional[int] = 10
-        ):
+        ) -> str:
             """
             Retrieves relevant Telegram chat messages from a Weaviate collection using semantic query and structured filters.
 
@@ -155,7 +156,7 @@ class LangGraphNodes:
             Behavior:
             - If `query` is provided, performs vector search using `near_text`.
             - If `query` is not provided, performs metadata-only filtering using `fetch_objects`.
-            - Regardless of mode, results are always filtered by the allowed `channel_ids` via an internal OR condition.
+            - Regardless of mode, results are always filtered by the allowed `channel_ids` via an internal AND condition.
             - Results are returned as XML-like formatted string for downstream processing.
 
             Returns:
@@ -223,10 +224,41 @@ class LangGraphNodes:
 
             return message
 
-        llm_with_tools = ChatOpenAI(temperature=0,
+        @tool
+        def get_drug_pricing_information() -> str:
+            """
+            Retrieves structured summaries of drug pricing information from monitored Telegram channels.
+
+            For each channel where catalog data is available, this function returns a formatted document containing:
+            - <channel_id>: The unique Telegram channel ID
+            - <catalog>: A human-readable summary of drug product types and their prices, grouped by item
+            - <source>: A comma-separated list of t.me URLs pointing to the original Telegram messages containing the pricing information
+
+            Only channels that have both catalog description and message references (chatIds) will be included.
+
+            Returns:
+                A concatenated XML-style string with one <document> block per channel, each containing:
+                <channel_id>...</channel_id>
+                <catalog>...</catalog>
+                <source>...</source>
+
+            This output is designed to be read by an AI model or investigator for reviewing summarized pricing intelligence per channel.
+            """
+            doc = ""
+            for info in Database.Collection.Channel.INFO.find({"_id": {"$in": channel_ids}}):
+                if info.get("catalog") and info.get("catalog").get("chatIds"):
+                    doc += "<document>"
+                    doc += f"<channel_id>{info.get("_id")}</channel_id>"
+                    doc += f"<catalog>{info["catalog"].get("description")}</catalog>"
+                    username = info.get("username")
+                    sources = [f"<url>https://t.me/{username}/{chatId}</url>" for chatId in info["catalog"].get("chatIds")]
+                    doc += f"<sources>\n{"\n".join(sources)}\n</sources>"
+                    doc += f"</document>"
+            return doc
+
+        llm_with_tools = ChatOpenAI(temperature=0.5,
                                     model=MODEL_NAME,
-                                    streaming=True).bind_tools([retriever_from_weaviate],
-                                                               tool_choice=retriever_from_weaviate.name)
+                                    streaming=True).bind_tools([retriever_from_weaviate, get_drug_pricing_information])
 
         indication = Indications.Interpret.WEAVIATE
         prompt = ChatPromptTemplate.from_messages([
@@ -240,7 +272,10 @@ class LangGraphNodes:
         messages = [ai_msg]
         # 결과를 ToolMessage로 변환
         for tool_call in ai_msg.tool_calls:
-            selected_tool = {"retriever_from_weaviate": retriever_from_weaviate}[tool_call["name"].lower()]
+            selected_tool = {
+                "retriever_from_weaviate": retriever_from_weaviate,
+                "get_drug_pricing_information": get_drug_pricing_information
+            }[tool_call["name"].lower()]
             tool_msg = selected_tool.invoke(tool_call)
             messages.append(tool_msg)
 
@@ -263,7 +298,6 @@ class LangGraphNodes:
             print("\n=== NODE: generate ===\n")
 
         if state.get("type") != "others":
-            context = state["messages"][-1].content  # tool node의 결과를 context로 저장
             indication = Indications.Generate.BY_CHATS  # type이 "chats"일 때
 
             # 기존 state["messages"]에 새로운 지시와 질문을 더해서 같이 제공한다.

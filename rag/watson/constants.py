@@ -12,3 +12,4 @@ checkpoint_writes_collection = Database.Collection.CHATBOT_CHECKPOINT_WRITES
 dimension_size = 1536
 
 weaviate_index_name = "TelegramMessages"
+# weaviate_index_name = "TelegramMessagesInstructor"
