@@ -196,7 +196,7 @@ class LangGraphNodes:
                         query=query,
                         filters=filter_obj,
                         # sort: 벡터 검색 수행 시에는 sort 인자는 사용 불가!
-                        limit=limit
+                        limit=8 # limit은 사용 가능하긴 한데 벡터 검색 시에는 불필요함
                     )
                 else:
                     response = collection.query.fetch_objects(

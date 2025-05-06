@@ -127,7 +127,7 @@ LogicalFilter is one of:
 
 ## Field-specific operator rules:
 - `text` (TEXT):
-  - allowed operators: `"eq"`, `"neq"`, `"like"`, `"contains_any"`, `"contains_all"`, `"isnull"`
+  - allowed operators: `"eq"`, `"neq"`, `"like"`, `"isnull"`
 - `views` (INT):
   - allowed operators: `"eq"`, `"neq"`, `"gt"`, `"gte"`, `"lt"`, `"lte"`, `"isnull"`
   - DO NOT use `"like"`, `"contains_*"` on `views`
@@ -164,6 +164,21 @@ If an invalid operator is used with a field (e.g., `like` on `timestamp`), rejec
 
 
 Return only the fields listed above. If anything is unclear or not explicitly requested, omit it or set to null.
+
+### Additional Guidance on `text` Field Usage
+Do not use a "text" filter with the "like" operator unless the user explicitly requests that a specific word or phrase must appear in the text.
+
+If the user's question is phrased semantically (e.g., "어떤 채팅에서 직원 모집 공고가 있었나?") and does not specify an exact substring to be matched, then use the "query" field with a natural language string instead of a filter.
+
+Examples:
+"'링크'가 포함된 메세지를 보여줘" -> use filters with {{"field": "text", "op": "like", "value": "*link*"}}
+
+"어느 지역에서 판매돼?" -> use query=["지역", "좌표"], do not use a text filter
+"상품 안내를 하는 채팅이 있어?" -> use query=["상품"], do not use a text filter
+"거래 연락처가 어떻게 되지?" -> use query=["거래", "연락"], do not use a text filter
+"드라퍼 구인 정보가 포함된 글을 알려줘" -> use query=["드라퍼", "직원", "모집", "구인"], do not use a text filter
+"거래 방식이 포함된 글을 알려줘" -> use query=["거래 방식"], do not use a text filter
+"가격 이벤트를 언제 했지?" -> use query=["가격 이벤트", "할인"], do not use a text filter
 
 # When using `get_drug_pricing_information` tool for Price-related queries:
 If the user's question is about price, price range, or payment amount (e.g., contains terms like "가격", "가격대", "금액", "얼마", "비용", etc.),
