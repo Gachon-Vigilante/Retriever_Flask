@@ -1,7 +1,8 @@
 import typing
-from datetime import datetime
+from typing import Any
+from datetime import datetime, timezone
 from server.logger import logger
-from .constants import chatbot_collection
+from .constants import chatbot_collection, channel_collection
 
 if typing.TYPE_CHECKING:
     from . import Watson
@@ -19,3 +20,14 @@ class MongoDBMethods:
                                           }}, upsert=True) # upsert=True -> 없을 경우 신규 생성
         except Exception as e:
             logger.error(f"An error occurred while updating chatbot metadata at MongoDB: {e}")
+
+    def get_channel_info(self: 'Watson') -> dict[str, dict[str, Any]]:
+        return {
+            f"Channel #{i}": {
+                "channel id": doc["_id"],
+                "channel title": doc["title"],
+                "this channel is created at": doc["startedAt"].replace(tzinfo=timezone.utc).isoformat(),
+                "we discovered this channel at": doc["discoveredAt"].replace(tzinfo=timezone.utc).isoformat(),
+            }
+            for i, doc in enumerate(channel_collection.find({"_id": {"$in": self.channels}}))
+        }

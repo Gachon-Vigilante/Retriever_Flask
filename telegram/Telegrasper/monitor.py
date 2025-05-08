@@ -1,8 +1,13 @@
 import asyncio
 import typing
-from telethon import events
-from telethon.errors import ChatForwardsRestrictedError
+from datetime import datetime, timezone
 
+from telethon import events
+from telethon.errors import ChatForwardsRestrictedError as ChatForwardsRestrictedError1
+from telethon.errors.rpcerrorlist import ChatForwardsRestrictedError as ChatForwardsRestrictedError2
+
+from ai.telegram import get_reports_by_openai, Report
+from server.db import Database
 from .channelscraper import process_message
 from .utils import *
 from server.logger import logger
@@ -34,11 +39,16 @@ class ChannelContentMonitorMethods:
             if chat and event.message:
                 message, sender = event.message, await event.get_sender()
                 await process_message(chat, self.client, message)
+
+                if message.text and entity.id and message.id:
+                    reports = get_reports_by_openai(message.text)
+                    register_reports(entity.id, message.id, reports)
+
                 sender = extract_sender_info(sender)
                 # 메세지를 나에게 포워딩
                 try:
                     await self.client.forward_messages(self.my_user_id, event.message)
-                except ChatForwardsRestrictedError:
+                except ChatForwardsRestrictedError1 and ChatForwardsRestrictedError2:
                     logger.warning("This chat has message forwarding restricted.")
                     if message.text:
                         await self.client.send_message(self.my_user_id, message.text)
@@ -53,12 +63,13 @@ class ChannelContentMonitorMethods:
     
         try:
             # 채널 엔티티 가져오기
-            channel = await self.connect_channel(channel_key)
-            logger.debug(f"Monitoring channel - Channel Name: {channel.title}, Channel ID: {channel.id}")  # https://t.me/<channel_username>의 채널 ID 출력
-    
-            # 이벤트 핸들러 저장 및 등록
-            self.event_handlers_map[channel_key] = event_handler
-            self.client.add_event_handler(event_handler, events.NewMessage(chats=channel.id))
+            entity = await self.connect_channel(channel_key)
+            if entity:
+                logger.debug(f"Monitoring channel - Channel Name: {entity.title}, Channel ID: {entity.id}")  # https://t.me/<channel_username>의 채널 ID 출력
+
+                # 이벤트 핸들러 저장 및 등록
+                self.event_handlers_map[channel_key] = event_handler
+                self.client.add_event_handler(event_handler, events.NewMessage(chats=entity.id))
         except asyncio.CancelledError:
             logger.info(f"Task for {channel_key} was cancelled. Cleaning up...")
         except Exception as e:
@@ -102,3 +113,16 @@ def save_message_to_file(sender_name, sender_id, message_text, timestamp):
     with open(log_file_path, "a", encoding="utf-8") as file:
         log_entry = f"[{timestamp}] Sender: {sender_name} (ID: {sender_id}), Message: {message_text}\n"
         file.write(log_entry)
+
+
+def register_reports(channel_id:int, chat_id:int, reports: list[Report]):
+    for report in reports:
+        Database.Collection.REPORTS.insert_one({
+            "channelId": channel_id,
+            "chatId": chat_id,
+            "type": report.report_type,
+            "content": report.report_content,
+            "description": report.report_description,
+            "timestamp": datetime.now(tz=timezone.utc),
+        })
+        logger.info(f"새로운 첩보를 입수, 데이터베이스에 저장했습니다. Channel ID: {channel_id}, Chat ID: {chat_id}, Report: {report}")

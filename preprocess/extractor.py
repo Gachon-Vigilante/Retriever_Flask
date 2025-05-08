@@ -85,7 +85,6 @@ import re
 def extract_telegram_links(data: Union[str, list[str]]) -> list[str]:
     telegram_pattern = r"(?i)(?:https?://)?t\.me/(?:s/|joinchat/)?([~+]?[a-zA-Z0-9_-]+)(?:/\d+)?"
 
-
     if not data:
         return []  # None이나 빈 값이면 그냥 빈 리스트로 반환
 

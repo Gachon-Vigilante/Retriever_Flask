@@ -158,6 +158,22 @@ def compare_dicts_sorted(
 
     return True
 
+from datetime import datetime, timezone
+
+def dict_to_xml(data: dict) -> str:
+    """
+    Convert a dictionary to XML string, wrapping each key/value in a tag.
+    Datetime objects are formatted as UTC ISO strings.
+    """
+    xml_parts = []
+    for key, value in data.items():
+        if isinstance(value, datetime):
+            # Ensure UTC and ISO format
+            text = value.astimezone(timezone.utc).isoformat()
+        else:
+            text = str(value)
+        xml_parts.append(f'<{key}>{text}</{key}>')
+    return ''.join(xml_parts)
 
 import requests
 
@@ -179,7 +195,7 @@ class ApiResponse:
             self.data = response.reason
 
     def __repr__(self):
-        string = f"status: {self.status_code}\nresponse:"
+        string = f"status: {self.status_code}\ndata:"
         if isinstance(self.data, dict):
             for key, value in self.data.items():
                 string += f"\n\t{key}: {value}"

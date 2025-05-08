@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify
 from server.logger import logger
 from utils import confirm_request
 from .Telegrasper.manager import TelegramManager
+from .Telegrasper.catalog import update_catalog
 
 import threading
 import typing
@@ -40,7 +41,7 @@ def connect_channel():
     try:
         return jsonify(telegram_manager.get_channel_info(data['channel_key'])), 200
     except Exception as e:
-        logger.error(str(e))
+        logger.error(f"{type(e)}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -61,7 +62,7 @@ def scrape_channel():
     try:
         return jsonify(telegram_manager.scrape(channel_key)), 200
     except Exception as e:
-        logger.error(str(e))
+        logger.error(f"{type(e)}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @telegram_bp.route('/channel/check-suspicious', methods=['POST'])
@@ -76,7 +77,7 @@ def check_channel():
     try:
         return jsonify({"suspicious": check_result}), 200
     except Exception as e:
-        logger.error(str(e))
+        logger.error(f"{type(e)}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @telegram_bp.route('/channel/monitoring', methods=['POST'])
@@ -101,5 +102,22 @@ def monitor_channel():
 
         return jsonify({"success": True}), 200
     except Exception as e:
-        logger.error(str(e))
+        logger.error(f"{type(e)}: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+
+
+@telegram_bp.route('/channel/catalog', methods=['POST'])
+def write_catalog():
+    """특정 채널의 가격 정보를 추가로 추출해서 저장한다."""
+    data = request.json
+    try:
+        if response_for_invalid_request := confirm_request(data, {
+            'channel_id': int,
+        }):
+            return response_for_invalid_request
+        update_catalog(data['channel_id'])
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        logger.error(e)
+        return jsonify({"error": e}), 500

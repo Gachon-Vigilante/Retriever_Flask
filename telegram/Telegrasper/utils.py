@@ -9,18 +9,18 @@ def extract_sender_info(sender):
             "name": sender.username or None,
             "firstName": sender.first_name or None,
             "lastName": sender.last_name or None,
-            "id": sender.id,
+            "senderId": sender.id,
         }
     elif sender and isinstance(sender, types.Channel):
         return {
             "type": "channel",
             "name": sender.title or None,
-            "id": sender.id,
+            "senderId": sender.id,
         }
     return {
         "type": "unknown",
         "name": None,
-        "id": None
+        "senderId": None
     }
 
 

@@ -30,6 +30,13 @@ def extract_promotion_by_openai(html: str) -> dict[str, str]:
     # 전체 HTMl 텍스트를 블록으로 분할
     text_blocks = extract_text_blocks_from_html(html)
 
+    if not html or not text_blocks or len(html) == 0:
+        return {
+            "classification_result": False,
+            "promotion_content": "",
+            "telegrams": [],
+        }
+
 
     # LLM 모델 초기화 -> 구조화된 출력을 위한 LLM 설정
     llm_with_structured_output = ChatOpenAI(temperature=0,
@@ -61,7 +68,10 @@ The following argot terms are commonly used to refer to illegal drugs and may in
 * Return False under `binary_classification` if the content merely reports on drug-related activities (e.g., police investigations, news coverage, public announcements) without promoting sales.
 * If meaning is ambiguous or there's no clear evidence of promotion, return False under `binary_classification`.
 * If `binary_classification` is `False`, leave other fields empty.
-* If `binary_classification` is `True`, return the exact portion of the input text that promotes drug sales under `promotion_content` (without translation or alteration). Also, from the promotion content, return any strings that appear to be Telegram addresses, @usernames, or invitation links as a list under `telegram_key`.
+* If `binary_classification` is `True`, return the exact portion of the input text that promotes drug sales under `promotion_content` (without translation or alteration). Also, from the promotion content, return any strings that appear to be Telegram addresses, @usernames, or invitation links as a list under `telegram_key`. This means:
+    - Strip prefixes like t.me/, @, or phrases like <텔레그램 주소>.
+    - Normalize any visually obfuscated text using Unicode characters that resemble Latin letters (e.g., 𝐎𝐆𝐆𝐎𝐎𝐌𝐀𝐍 → OGGOOMAN) before extracting.
+    - For example, from t.me/𝐲𝐨𝐮𝐫𝐭𝐫𝐢𝐩𝟎𝟏, extract "yourtrip01".
 
 
 ### **Rules:**
