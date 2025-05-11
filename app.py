@@ -30,8 +30,8 @@ from preprocess import preprocess_bp
 app.register_blueprint(preprocess_bp)
 from telegram import telegram_bp
 app.register_blueprint(telegram_bp)
-# from rag import watson_bp # 당분간은 watson 사용 안함
-# app.register_blueprint(watson_bp)
+from rag import watson_bp # 당분간은 watson 사용 안함
+app.register_blueprint(watson_bp)
 from clustering import cluster_bp
 app.register_blueprint(cluster_bp)
 

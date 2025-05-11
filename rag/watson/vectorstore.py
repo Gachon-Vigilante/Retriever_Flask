@@ -1,12 +1,9 @@
-import os
 import typing
 from datetime import datetime
 from typing import Optional
 
-import weaviate
 from bson import ObjectId
 from langchain_community.document_loaders import MongodbLoader
-from langchain_openai import OpenAIEmbeddings
 from langchain_weaviate import WeaviateVectorStore
 from weaviate.classes.config import Configure, Property, DataType
 from weaviate.classes.query import Filter
@@ -14,8 +11,8 @@ from weaviate.client import WeaviateClient
 
 from server.db import get_mongo_connection_string, Database
 from server.logger import logger
-from .weaviate import WeaviateClientContext
 from .constants import weaviate_index_name
+from .weaviate import connect_weaviate, WeaviateClientContext
 
 if typing.TYPE_CHECKING:
     from rag.watson import Watson
@@ -28,18 +25,9 @@ class VectorStoreMethods:
             VectorStoreMethods.register_schema(client)
 
         return WeaviateVectorStore(
-            client=weaviate_client if weaviate_client else VectorStoreMethods.connect_weaviate(),
+            client=weaviate_client if weaviate_client else connect_weaviate(),
             index_name=weaviate_index_name,
             text_key="text",
-        )
-
-    @staticmethod
-    def connect_weaviate() -> WeaviateClient:
-        return weaviate.connect_to_local(
-            headers={
-                "X-OpenAI-Api-Key": os.getenv("OPENAI_API_KEY"),
-                "X-HuggingFace-Api-Key": os.getenv("HUGGINGFACE_API_KEY"),
-            },
         )
 
     @staticmethod
@@ -52,6 +40,7 @@ class VectorStoreMethods:
         weaviate_client.collections.create(
             weaviate_index_name,
             description="Telegram channel messages with metadata",
+            reranker_config=Configure.Reranker.cohere(),
             vectorizer_config=Configure.Vectorizer.text2vec_openai(),
             properties=[  # properties configuration is optional
                 Property(name="objectId", data_type=DataType.TEXT),
@@ -69,7 +58,7 @@ class VectorStoreMethods:
                          ], ),
             ]
         )
-        logger.info("TelegramMessages schema created in Weaviate.")
+        logger.info("TelegramMessages schema is created in Weaviate.")
 
     def update_vectorstore(self: 'Watson'):
         with WeaviateClientContext() as weaviate_client:

@@ -1,4 +1,4 @@
-from langchain_openai import OpenAIEmbeddings
+import os
 
 from server.db import Database
 
@@ -13,3 +13,9 @@ dimension_size = 1536
 
 weaviate_index_name = "TelegramMessages"
 # weaviate_index_name = "TelegramMessagesInstructor"
+
+weaviate_headers={
+    "X-OpenAI-Api-Key": os.getenv("OPENAI_API_KEY"),
+    "X-HuggingFace-Api-Key": os.getenv("HUGGINGFACE_API_KEY"),
+    "X-Cohere-Api-Key": os.getenv("COHERE_APIKEY"),
+}

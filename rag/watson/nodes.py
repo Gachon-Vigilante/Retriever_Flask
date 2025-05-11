@@ -6,7 +6,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langchain_teddynote.models import get_model_name, LLMs
-from weaviate.classes.query import Filter, Sort
+from weaviate.classes.query import Filter, Sort, Rerank
 
 from server.db import Database
 from utils import dict_to_xml
@@ -192,11 +192,16 @@ class LangGraphNodes:
 
                 # near_text or fetch_objects
                 if query:
+                    # rerank된 결과로 20개를 고정적으로 받아오고, 그 후 limit으로 잘라낸다.
                     response = collection.query.near_text(
                         query=query,
                         filters=filter_obj,
+                        rerank=Rerank(
+                            prop="text",
+                            query=state["question"]
+                        ),
                         # sort: 벡터 검색 수행 시에는 sort 인자는 사용 불가!
-                        limit=8 # limit은 사용 가능하긴 한데 벡터 검색 시에는 불필요함
+                        limit=20 # limit은 사용 가능하긴 한데 벡터 검색 시에는 불필요함. 대신 rerank한 결과에서 나중에 limit만큼 잘라낼것
                     )
                 else:
                     response = collection.query.fetch_objects(
@@ -207,7 +212,9 @@ class LangGraphNodes:
 
                 # 결과를 LangChain Document로 변환
                 documents = []
-                for obj in response.objects:
+                for i, obj in enumerate(response.objects):
+                    if i >= limit:
+                        break
                     page_content = obj.properties.get("text") or ""
                     metadata = {
                         "channel id": obj.properties.get("channelId"),
@@ -304,7 +311,7 @@ class LangGraphNodes:
             # memory를 설정하면 state["messages"]에 계속해서 대화 기록이 저장되기 때문에,
             # 이를 AI가 받아서 이전 채팅 기록에 근거한 답변을 생성할 수 있게 된다.
             prompt = ChatPromptTemplate.from_messages([
-                # 최대 25개 대화 메세지를 기억으로 저장. toolmessage 등도 다 반영되기 때문에 실제로는 10번 정도의 질의응답 상호작용을 기억할 것.
+                # 최대 50개 대화 메세지를 기억으로 저장. toolmessage 등도 다 반영되기 때문에 실제로는 10번 정도의 질의응답 상호작용을 기억할 것.
                 *(state["messages"][-min(len(state["messages"]), 50):]),
                 ("system", indication),
                 ("human", "{question}"),
@@ -314,16 +321,23 @@ class LangGraphNodes:
             # StrOutParser()를 사용하면 결과가 문자열이 되어서 state["messages"]에 추가될 때 자동으로 HumanMessage로 타입이 변환되기 때문에,
             # Memory에 저장 후 AI에게 제공해도 AI가 이를 AI의 응답으로 인식하지 못한다.
             # 따라서 StrOutputParser는 사용하지 말자.
-            rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
+            rag_chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0)
 
             # 답변 생성
             response = rag_chain.invoke({"question": state.get("question", ""),
                                          "channel_information": channel_info
                                          })
         else:
-            llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0, streaming=True)
+            indication = Indications.Generate.BY_OTHERS
+            prompt = ChatPromptTemplate.from_messages([
+                # 최대 50개 대화 메세지를 기억으로 저장. toolmessage 등도 다 반영되기 때문에 실제로는 10번 정도의 질의응답 상호작용을 기억할 것.
+                *(state["messages"][-min(len(state["messages"]), 50):]),
+                ("system", indication),
+                ("human", "{question}"),
+            ])
+            chain = prompt | ChatOpenAI(model_name=MODEL_NAME, temperature=0)
             # 답변 생성
-            response = llm.invoke(state["messages"])
+            response = chain.invoke({"question": state.get("question", "")})
 
         return update_state(state,
                             node_name="generate",

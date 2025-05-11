@@ -66,8 +66,3 @@ python-louvain
 
 # Tokenizing에 필요한 패키지
 sentencepiece
-
-# Object Detection에 필요한 패키지
-deep-sort-realtime
-opencv-python
-ultralytics

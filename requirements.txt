@@ -6,13 +6,13 @@
 #
 aiohappyeyeballs==2.6.1
     # via aiohttp
-aiohttp==3.11.16
+aiohttp==3.11.18
     # via langchain-community
 aiosignal==1.3.2
     # via aiohttp
 annotated-types==0.7.0
     # via pydantic
-anthropic==0.49.0
+anthropic==0.50.0
     # via langchain-teddynote
 anyio==4.9.0
     # via
@@ -34,7 +34,7 @@ blinker==1.9.0
     # via flask
 cachetools==5.5.2
     # via google-auth
-certifi==2025.1.31
+certifi==2025.4.26
     # via
     #   httpcore
     #   httpx
@@ -45,7 +45,7 @@ cffi==1.17.1
     # via
     #   cryptography
     #   trio
-charset-normalizer==3.4.1
+charset-normalizer==3.4.2
     # via requests
 click==8.1.8
     # via
@@ -56,21 +56,15 @@ colorama==0.4.6
     #   click
     #   ipython
     #   tqdm
-contourpy==1.3.2
-    # via matplotlib
-cryptography==44.0.2
+cryptography==44.0.3
     # via authlib
-cycler==0.12.1
-    # via matplotlib
 dataclasses-json==0.6.7
     # via langchain-community
 datetime==5.5
     # via -r requirements.in
 decorator==5.2.1
     # via ipython
-deep-sort-realtime==1.3.2
-    # via -r requirements.in
-deepl==1.21.1
+deepl==1.22.0
     # via langchain-teddynote
 deprecation==2.1.0
     # via weaviate-client
@@ -97,9 +91,7 @@ flask==3.1.0
     #   flask-cors
 flask-cors==5.0.1
     # via -r requirements.in
-fonttools==4.57.0
-    # via matplotlib
-frozenlist==1.5.0
+frozenlist==1.6.0
     # via
     #   aiohttp
     #   aiosignal
@@ -107,11 +99,11 @@ fsspec==2025.3.2
     # via
     #   huggingface-hub
     #   torch
-google-api-core==2.24.2
+google-api-core==2.25.0rc0
     # via
     #   google-cloud-core
     #   google-cloud-storage
-google-auth==2.39.0
+google-auth==2.40.0
     # via
     #   google-api-core
     #   google-cloud-core
@@ -133,7 +125,7 @@ googleapis-common-protos==1.70.0
     #   google-api-core
     #   pinecone-client
     #   protoc-gen-openapiv2
-greenlet==3.2.0
+greenlet==3.2.1
     # via sqlalchemy
 grpcio==1.71.0
     # via
@@ -145,11 +137,11 @@ grpcio-health-checking==1.71.0
     # via weaviate-client
 grpcio-tools==1.71.0
     # via weaviate-client
-h11==0.14.0
+h11==0.16.0
     # via
     #   httpcore
     #   wsproto
-httpcore==1.0.8
+httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via
@@ -172,7 +164,7 @@ idna==3.10
     #   requests
     #   trio
     #   yarl
-ipython==9.1.0
+ipython==9.2.0
     # via -r requirements.in
 ipython-pygments-lexers==1.1.1
     # via ipython
@@ -188,7 +180,7 @@ jiter==0.9.0
     # via
     #   anthropic
     #   openai
-joblib==1.4.2
+joblib==1.5.0
     # via
     #   nltk
     #   scikit-learn
@@ -196,20 +188,18 @@ jsonpatch==1.33
     # via langchain-core
 jsonpointer==3.0.0
     # via jsonpatch
-kiwipiepy==0.20.4
+kiwipiepy==0.21.0
     # via langchain-teddynote
-kiwipiepy-model==0.20.0
+kiwipiepy-model==0.21.0
     # via kiwipiepy
-kiwisolver==1.4.8
-    # via matplotlib
-langchain==0.3.23
+langchain==0.3.25
     # via
     #   -r requirements.in
     #   langchain-community
     #   langchain-teddynote
-langchain-community==0.3.21
+langchain-community==0.3.23
     # via -r requirements.in
-langchain-core==0.3.52
+langchain-core==0.3.58
     # via
     #   -r requirements.in
     #   langchain
@@ -220,7 +210,7 @@ langchain-core==0.3.52
     #   langgraph
     #   langgraph-checkpoint
     #   langgraph-prebuilt
-langchain-openai==0.3.13
+langchain-openai==0.3.16
     # via -r requirements.in
 langchain-teddynote==0.3.45
     # via -r requirements.in
@@ -228,9 +218,9 @@ langchain-text-splitters==0.3.8
     # via langchain
 langchain-weaviate==0.0.4
     # via -r requirements.in
-langgraph==0.3.30
+langgraph==0.4.1
     # via langchain-teddynote
-langgraph-checkpoint==2.0.24
+langgraph-checkpoint==2.0.25
     # via
     #   langgraph
     #   langgraph-checkpoint-mongodb
@@ -239,9 +229,9 @@ langgraph-checkpoint-mongodb==0.1.3
     # via -r requirements.in
 langgraph-prebuilt==0.1.8
     # via langgraph
-langgraph-sdk==0.1.61
+langgraph-sdk==0.1.66
     # via langgraph
-langsmith==0.3.31
+langsmith==0.3.42
     # via
     #   -r requirements.in
     #   langchain
@@ -255,10 +245,6 @@ markupsafe==3.0.2
     #   werkzeug
 marshmallow==3.26.1
     # via dataclasses-json
-matplotlib==3.10.1
-    # via
-    #   seaborn
-    #   ultralytics
 matplotlib-inline==0.1.7
     # via ipython
 mmh3==4.1.0
@@ -273,7 +259,7 @@ multidict==6.4.3
     # via
     #   aiohttp
     #   yarl
-mypy-extensions==1.0.0
+mypy-extensions==1.1.0
     # via typing-inspect
 neo4j==5.28.1
     # via -r requirements.in
@@ -286,38 +272,25 @@ nltk==3.9.1
 numpy==1.26.4
     # via
     #   -r requirements.in
-    #   contourpy
-    #   deep-sort-realtime
     #   kiwipiepy
     #   langchain-community
     #   langchain-weaviate
-    #   matplotlib
-    #   opencv-python
     #   pandas
     #   pinecone-text
     #   python-louvain
     #   rank-bm25
     #   scikit-learn
     #   scipy
-    #   seaborn
-    #   torchvision
     #   transformers
-    #   ultralytics
-    #   ultralytics-thop
 olefile==0.47
     # via langchain-teddynote
-openai==1.74.0
+openai==1.77.0
     # via
     #   langchain-openai
     #   langchain-teddynote
-opencv-python==4.11.0.86
-    # via
-    #   -r requirements.in
-    #   deep-sort-realtime
-    #   ultralytics
 openpyxl==3.1.5
     # via -r requirements.in
-orjson==3.10.16
+orjson==3.10.18
     # via
     #   langgraph-sdk
     #   langsmith
@@ -334,23 +307,15 @@ packaging==24.2
     #   langchain-core
     #   langsmith
     #   marshmallow
-    #   matplotlib
     #   transformers
 pandas==2.2.3
-    # via
-    #   langchain-teddynote
-    #   seaborn
-    #   ultralytics
+    # via langchain-teddynote
 parso==0.8.4
     # via jedi
 pdf2image==1.17.0
     # via langchain-teddynote
 pillow==11.2.1
-    # via
-    #   matplotlib
-    #   pdf2image
-    #   torchvision
-    #   ultralytics
+    # via pdf2image
 pinecone-client[grpc]==6.0.0
     # via langchain-teddynote
 pinecone-plugin-interface==0.0.7
@@ -376,12 +341,8 @@ protobuf==5.29.4
     #   protoc-gen-openapiv2
 protoc-gen-openapiv2==0.0.1
     # via pinecone-client
-psutil==7.0.0
-    # via ultralytics
 pure-eval==0.2.3
     # via stack-data
-py-cpuinfo==9.0.0
-    # via ultralytics
 pyaes==1.6.1
     # via telethon
 pyasn1==0.6.1
@@ -392,19 +353,20 @@ pyasn1-modules==0.4.2
     # via google-auth
 pycparser==2.22
     # via cffi
-pydantic==2.11.3
+pydantic==2.11.4
     # via
     #   -r requirements.in
     #   anthropic
     #   langchain
     #   langchain-core
+    #   langgraph
     #   langsmith
     #   openai
     #   pydantic-settings
     #   weaviate-client
-pydantic-core==2.33.1
+pydantic-core==2.33.2
     # via pydantic
-pydantic-settings==2.8.1
+pydantic-settings==2.9.1
     # via langchain-community
 pygments==2.19.1
     # via
@@ -415,13 +377,10 @@ pymongo==4.11.3
     #   -r requirements.in
     #   langgraph-checkpoint-mongodb
     #   motor
-pyparsing==3.2.3
-    # via matplotlib
 pysocks==1.7.1
     # via urllib3
 python-dateutil==2.9.0.post0
     # via
-    #   matplotlib
     #   pandas
     #   pinecone-client
 python-dotenv==1.1.0
@@ -443,7 +402,6 @@ pyyaml==6.0.2
     #   langchain-community
     #   langchain-core
     #   transformers
-    #   ultralytics
 rank-bm25==0.2.2
     # via langchain-teddynote
 regex==2024.11.6
@@ -466,10 +424,9 @@ requests==2.32.3
     #   tavily-python
     #   tiktoken
     #   transformers
-    #   ultralytics
 requests-toolbelt==1.0.0
     # via langsmith
-rsa==4.9
+rsa==4.9.1
     # via
     #   google-auth
     #   telethon
@@ -478,13 +435,8 @@ safetensors==0.5.3
 scikit-learn==1.6.1
     # via -r requirements.in
 scipy==1.15.2
-    # via
-    #   deep-sort-realtime
-    #   scikit-learn
-    #   ultralytics
-seaborn==0.13.2
-    # via ultralytics
-selenium==4.31.0
+    # via scikit-learn
+selenium==4.32.0
     # via -r requirements.in
 sentencepiece==0.2.0
     # via -r requirements.in
@@ -502,7 +454,7 @@ sniffio==1.3.1
     #   trio
 sortedcontainers==2.4.0
     # via trio
-soupsieve==2.6
+soupsieve==2.7
     # via beautifulsoup4
 sqlalchemy==2.0.40
     # via
@@ -510,11 +462,11 @@ sqlalchemy==2.0.40
     #   langchain-community
 stack-data==0.6.3
     # via ipython
-sympy==1.13.1
+sympy==1.14.0
     # via torch
-tavily-python==0.5.4
+tavily-python==0.7.2
     # via langchain-teddynote
-telethon==1.39.0
+telethon==1.40.0
     # via -r requirements.in
 tenacity==9.1.2
     # via
@@ -528,14 +480,8 @@ tiktoken==0.9.0
     #   tavily-python
 tokenizers==0.21.1
     # via transformers
-torch==2.6.0
-    # via
-    #   -r requirements.in
-    #   torchvision
-    #   ultralytics
-    #   ultralytics-thop
-torchvision==0.21.0
-    # via ultralytics
+torch==2.7.0
+    # via -r requirements.in
 tqdm==4.67.1
     # via
     #   huggingface-hub
@@ -543,14 +489,13 @@ tqdm==4.67.1
     #   nltk
     #   openai
     #   transformers
-    #   ultralytics
 traitlets==5.14.3
     # via
     #   ipython
     #   matplotlib-inline
 transformers==4.51.3
     # via -r requirements.in
-trio==0.29.0
+trio==0.30.0
     # via
     #   selenium
     #   trio-websocket
@@ -577,13 +522,11 @@ typing-extensions==4.13.2
 typing-inspect==0.9.0
     # via dataclasses-json
 typing-inspection==0.4.0
-    # via pydantic
+    # via
+    #   pydantic
+    #   pydantic-settings
 tzdata==2025.2
     # via pandas
-ultralytics==8.3.116
-    # via -r requirements.in
-ultralytics-thop==2.0.14
-    # via ultralytics
 urllib3[socks]==2.4.0
     # via
     #   pinecone-client
@@ -608,7 +551,7 @@ wsproto==1.2.0
     # via trio-websocket
 xxhash==3.5.0
     # via langgraph
-yarl==1.19.0
+yarl==1.20.0
     # via aiohttp
 zope-interface==7.2
     # via datetime

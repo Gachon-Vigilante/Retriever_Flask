@@ -1,14 +1,18 @@
-import os
 import weaviate
+from weaviate import WeaviateClient
+
+from .constants import weaviate_headers
+
+
+def connect_weaviate() -> WeaviateClient:
+    return weaviate.connect_to_local(
+        headers=weaviate_headers,
+    )
 
 
 class WeaviateClientContext:
     def __enter__(self):
-        self.client = weaviate.connect_to_local(
-            headers={
-                "X-OpenAI-Api-Key": os.getenv("OPENAI_API_KEY")
-            },
-        )
+        self.client = connect_weaviate()
         return self.client
 
     def __exit__(self, exc_type, exc_val, exc_tb):
