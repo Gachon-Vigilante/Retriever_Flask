@@ -11,16 +11,6 @@ from .memory import MemoryMethods
 from .mongodb import MongoDBMethods
 from .vectorstore import VectorStoreMethods
 
-
-class AutoCreateInstances(type):
-    def __init__(cls, name, bases, dct):
-        super().__init__(name, bases, dct)
-        cls._instances = {}
-        for document in chatbot_collection.find():
-            cls._instances[document.get('_id')] = cls(bot_id=document.get('_id'))
-
-        logger.info(f"데이터베이스에 있는 챗봇을 모두 로드했습니다. 로드된 챗봇: {list(cls._instances.keys())}")
-
 import threading
 
 class WatsonRegistry:
@@ -60,6 +50,7 @@ class Watson(VectorStoreMethods, LangGraphMethods, MongoDBMethods, MemoryMethods
     MULTI = "multi"
     LOCAL = "local"
     embedding = OpenAIEmbeddings()
+    vectorstore = VectorStoreMethods.get_vectorstore()
 
     def __new__(cls, *, bot_id: Optional[int] = None, channel_ids: Optional[list[int]] = None, scope: Optional[str] = None, _from_db: bool = False):
         if bot_id:
@@ -84,39 +75,35 @@ class Watson(VectorStoreMethods, LangGraphMethods, MongoDBMethods, MemoryMethods
         raise ValueError("bot_id 또는 (channel_ids와 scope) 둘 중 하나는 입력되어야 합니다.")
 
     def __init__(self, *, bot_id: Optional[int] = None, channel_ids: Optional[list[int]] = None, scope: Optional[str] = None, _from_db: bool = False):
-        if getattr(self, "initialized", False):
-            return
+        if not getattr(self, "initialized", False):
+            if bot_id and _from_db:
+                bot_info = chatbot_collection.find_one({"_id": bot_id})
+                if not bot_info:
+                    raise KeyError(f"DB에 존재하지 않는 bot_id {bot_id}")
+                self.id = bot_id
+                self.channels = bot_info.get("channels")
+                self.chats = bot_info.get("chats")
+                self.scope = bot_info.get("scope")
+                logger.info(f"챗봇 정보를 데이터베이스에서 로드했습니다. ID: {self.id}, channel IDs: {self.channels}")
+            elif channel_ids and scope:
+                self.id = generate_integer_id64(existing_ids=WatsonRegistry._instances.keys())
+                self.channels = channel_ids
+                self.chats = []
+                self.scope = scope
+                logger.info(f"새로운 챗봇을 생성했습니다. ID: {self.id}, channel IDs: {self.channels}")
+            else:
+                raise ValueError("bot_id 또는 (channel_ids와 scope) 둘 중 하나는 필요합니다.")
 
-        if bot_id and _from_db:
-            bot_info = chatbot_collection.find_one({"_id": bot_id})
-            if not bot_info:
-                raise KeyError(f"DB에 존재하지 않는 bot_id {bot_id}")
-            self.id = bot_id
-            self.channels = bot_info.get("channels")
-            self.chats = bot_info.get("chats")
-            self.scope = bot_info.get("scope")
-            logger.info(f"챗봇을 데이터베이스에서 로드했습니다. ID: {self.id}, channel IDs: {self.channels}")
-        elif channel_ids and scope:
-            self.id = generate_integer_id64(existing_ids=WatsonRegistry._instances.keys())
-            self.channels = channel_ids
-            self.chats = []
-            self.scope = scope
-            for channel_id in channel_ids:
-                query = {"text": {"$ne": ""}} if scope == self.GLOBAL else {"channelId": channel_id, "text": {"$ne": ""}}
-                self.chats.extend([chat['_id'] for chat in chat_collection.find(query)])
-            logger.info(f"새로운 챗봇을 생성했습니다. ID: {self.id}, channel IDs: {self.channels}")
-        else:
-            raise ValueError("bot_id 또는 (channel_ids와 scope) 둘 중 하나는 필요합니다.")
-
-        self.vectorstore = self.initialize_vectorstore()
+        for channel_id in self.channels:
+            query = {"text": {"$ne": ""}} if scope == self.GLOBAL else {"channelId": channel_id, "text": {"$ne": ""}}
+            self.chats.extend([chat['_id'] for chat in chat_collection.find(query) if chat['_id'] not in self.chats])
         self.update_vectorstore()
         self._update_graph()
 
-        self.initialized = True
+        if not getattr(self, "initialized", False):
+            WatsonRegistry.register(self)
+            logger.info(f"메모리에 챗봇을 등록했습니다. ID: {self.id}, channel IDs: {self.channels}")
 
-        WatsonRegistry.register(self)
-        logger.info(f"메모리에 챗봇을 등록했습니다. ID: {self.id}, channel IDs: {self.channels}")
+            self.initialized = True
 
         super().__init__()
-
-WatsonRegistry.load_existing_bots()

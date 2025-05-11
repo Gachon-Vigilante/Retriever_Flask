@@ -9,15 +9,12 @@ from pymongo.synchronous.database import Database
 load_dotenv()
 
 def get_mongo_connection_string() -> str:
-    return (f"mongodb://{os.getenv('DB_USERNAME')}"
-            f":{os.getenv('DB_PASSWORD')}"
-            f"@{os.getenv('DB_IP')}"
-            f":{os.getenv('DB_PORT')}/")
+    return os.getenv("MONGO_CONNECTION_STRING")
 
 mongo_client = pymongo.MongoClient(get_mongo_connection_string()) # MongoDB 클라이언트 생성
 
-db_name = os.getenv('DB_NAME')
-db_object: Database = mongo_client[os.getenv('DB_NAME')]
+db_name = os.getenv('MONGO_DB_NAME')
+db_object: Database = mongo_client[db_name]
 
 class Database:
     class Collection:
@@ -34,6 +31,7 @@ class Database:
         POST_HTML: Collection = db_object["post_html"]
         POST_CLUSTERS: Collection = db_object["post_clusters"]
         POST_SIMILARITY: Collection = db_object["post_similarity"]
+        REPORTS: Collection = db_object["reports"]
 
     OBJECT = db_object
     NAME = db_name
