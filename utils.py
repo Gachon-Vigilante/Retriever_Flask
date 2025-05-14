@@ -15,6 +15,64 @@ def merge_lists_remove_duplicates(lists):
 
     return result
 
+from collections import deque
+
+def merge_parallel_unique_by_link(all_urls: dict[str, list[dict[str, str]]]) -> list[dict[str, str]]:
+    """
+        여러 개의 리스트(dict[str, str] 형식)를 병렬적으로 interleaving 순회하면서,
+        각 dict의 "link" 값을 기준으로 중복을 제거한 결과 리스트를 반환합니다.
+
+        각 리스트의 앞쪽부터 번갈아 가며 요소를 하나씩 추출하고,
+        "link" 값이 중복되지 않는 경우에만 결과에 추가합니다.
+
+        :param all_urls: 여러 개의 dict[str, str] 리스트를 값으로 가지는 딕셔너리
+                         예: {"a": [{"link": "url1", ...}, ...], "b": [...], ...}
+        :type all_urls: dict[str, list[dict[str, str]]]
+        :return: 중복되지 않은 "link"를 기준으로 병렬적으로 수집된 결과 리스트
+        :rtype: list[dict[str, str]]
+    """
+    queues = [deque(lst) for lst in all_urls.values()] # deque된 Queue 객체를 여러 개 생성
+    seen_links = set()
+    result = []
+
+    while any(queues): # 값이 있는 Queue가 하나라도 있다면 계속해서 순회
+        for queue in queues: # 모든 Queue에 대해서 각 Queue에서 데이터를 하나씩 순회하면서 뽑아서 저장(interleaving)
+            if queue: # Queue가 [], 즉 소진되지 않았을 경우에만 데이터 pop
+                item:dict[str, str] = queue.popleft()
+                link = item.get("link")
+                if link and link not in seen_links:
+                    seen_links.add(link)
+                    result.append(item)
+    return result
+
+def merge_parallel_unique(all_urls: dict[str, list[str]]) -> list[str]:
+    """
+        여러 개의 문자열 리스트를 병렬적으로 interleaving 순회하면서,
+        중복되지 않은 문자열만을 결과 리스트로 반환합니다.
+
+        각 리스트의 앞쪽부터 번갈아 가며 하나씩 값을 뽑고,
+        이미 등장한 문자열은 무시하고 새로운 문자열만 추가합니다.
+
+        :param all_urls: 문자열 리스트들을 값으로 가지는 딕셔너리
+                         예: {"a": ["url1", "url2"], "b": ["url3", ...], ...}
+        :type all_urls: dict[str, list[str]]
+        :return: 중복되지 않은 문자열로 구성된 리스트
+        :rtype: list[str]
+    """
+    queues = [deque(lst) for lst in all_urls.values()] # deque된 Queue 객체를 여러 개 생성
+    seen_urls = set()
+    result = []
+
+    while any(queues): # 값이 있는 Queue가 하나라도 있다면 계속해서 순회
+        for queue in queues: # 모든 Queue에 대해서 각 Queue에서 데이터를 하나씩 순회하면서 뽑아서 저장(interleaving)
+            if queue: # Queue가 [], 즉 소진되지 않았을 경우에만 데이터 pop
+                url:str = queue.popleft()
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    result.append(url)
+    return result
+
+
 from typing import get_origin, get_args, Any, Union, Literal
 
 def is_valid_type(value, expected_type):
@@ -100,6 +158,22 @@ def compare_dicts_sorted(
 
     return True
 
+from datetime import datetime, timezone
+
+def dict_to_xml(data: dict) -> str:
+    """
+    Convert a dictionary to XML string, wrapping each key/value in a tag.
+    Datetime objects are formatted as UTC ISO strings.
+    """
+    xml_parts = []
+    for key, value in data.items():
+        if isinstance(value, datetime):
+            # Ensure UTC and ISO format
+            text = value.astimezone(timezone.utc).isoformat()
+        else:
+            text = str(value)
+        xml_parts.append(f'<{key}>{text}</{key}>')
+    return ''.join(xml_parts)
 
 import requests
 
@@ -121,7 +195,7 @@ class ApiResponse:
             self.data = response.reason
 
     def __repr__(self):
-        string = f"status: {self.status_code}\nresponse:"
+        string = f"status: {self.status_code}\ndata:"
         if isinstance(self.data, dict):
             for key, value in self.data.items():
                 string += f"\n\t{key}: {value}"

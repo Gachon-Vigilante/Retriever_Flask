@@ -1,16 +1,12 @@
 import asyncio
-import re
-import typing
 import os
+import typing
 
-from pymongo import MongoClient
-
-from preprocess.extractor import argot_dictionary
+from ai.telegram import check_telegram_by_openai
 from server.cypher import run_cypher, Neo4j
-from server.db import DB, Database
-from server.logger import logger
+from server.db import Database
 from server.google import *
-
+from server.logger import logger
 from .utils import download_media, extract_sender_info, get_url_from_message
 
 default_bucket_name = os.environ.get('GCS_BUCKET_NAME')
@@ -19,44 +15,42 @@ if typing.TYPE_CHECKING:
     from .manager import TelegramManager
 
 class ChannelContentMethods:
-    async def check_channel_content(self:'TelegramManager', channel_key:typing.Union[int, str]) -> bool:
+    async def check_channel_content(self:'TelegramManager', channel) -> bool:
         """채널의 데이터를 일부 수집해서, 마약 관련 채널로 강력히 의심되는지 확인하는 검문 메서드."""
         try:
-            logger.debug(f"Connecting to channel: {channel_key}")
-            entity = await self.connect_channel(channel_key)
-            if entity is None:
-                logger.warning("Failed to connect to the channel.")
-                return False
+            if isinstance(channel, (int, str)): # channel key의 형태로 입력되었을 경우, 채널에 연결하고 entity 반환 필요
+                entity = await self.connect_channel(channel)
+                if entity is None:
+                    logger.debug(f"텔레그램 채널 검문 결과: False, 사유: 채널에 연결 불가능. Channel ID, @username or invite link: {channel}")
+                    return False
+            else:
+                entity = channel # channel entity 객체로 입력되었을 경우 그대로 사용
 
             # 메시지 확인
-            post_count = 0
-            suspicious_count = 0
+            merged_message:str = ""
+            chat_num = 1
             async for post in self.client.iter_messages(entity):
-                post_count += 1
+                if chat_num > 10:
+                    break # 최대 10개의 채팅만 수집
                 if post.text:
-                    # 메세지에서 은어가 총 3개 이상 발견되면 활성 채널로 분류
-                    suspicious_count += sum([len(re.findall(re.escape(keyword), post.text)) for keyword in argot_dictionary])
-                    if suspicious_count >= 3:
-                        return True
-                    # 100개 이내의 채팅에 은어가 3개 이상 없을 경우 탐색을 종료하고 비활성 채널로 분류
-                    if post_count > 100:
-                        return False
+                    merged_message += f"chat #{chat_num}: {post.text}\n"
+                    chat_num += 1
 
+            result = check_telegram_by_openai(merged_message)
+            logger.debug(f"텔레그램 채널 검문 결과: {result}, 채널 ID: {entity.id}, 채널 Title: {entity.title}, 사유: OpenAI의 판정")
+            return result
 
         except Exception as e:
             logger.error(f"An error occurred in check_channel_content(): {e}")
+            logger.debug(f"텔레그램 채널 검문 결과: False, 사유: 오류 발생")
             return False
-
-        return False
 
 
     # 채널 내의 데이터를 스크랩하는 함수
     async def scrape_channel_content(self:'TelegramManager', channel_key:typing.Union[int, str]) -> dict:
-        logger.debug(f"Connecting to channel: {channel_key}")
         try:
             entity = await self.connect_channel(channel_key)
             if entity is None:
-                logger.warning("Failed to connect to the channel.")
                 return {"status": "warning",
                         "message": "Failed to connect to the channel."}
             # 메시지 스크랩
@@ -66,6 +60,9 @@ class ChannelContentMethods:
             create_folder(default_bucket_name, entity.id)
 
             async for message in self.client.iter_messages(entity):
+                if post_count > 500: # 채널 채팅 수 최대 500개 수집으로 제한.
+                    break
+
                 post_count += 1
                 if post_count % 10 == 0:
                     logger.info(f"{post_count} Posts is scraped from {channel_key}")
@@ -80,7 +77,7 @@ class ChannelContentMethods:
 
         else:
             msg = (f"Archived all chats for the channel(Channel key: {channel_key}) in MongoDB - "
-                   f"DB: {DB.NAME}, collection: {DB.COLLECTION.CHANNEL.DATA}, channel ID: {entity.id}")
+                   f"DB: {Database.NAME}, collection: {Database.Collection.Channel.DATA}, channel ID: {entity.id}")
             logger.info(msg)
             return {"status": "success",
                     "message": msg}
@@ -100,8 +97,8 @@ class ChannelContentMethods:
 async def process_message(entity, client, message) -> None:
     chat_collection = Database.Collection.Channel.DATA  # 채팅 컬렉션 선택
     channel_collection = Database.Collection.Channel.INFO
-    argot_collection = DB.COLLECTION.ARGOT # 은어 컬렉션 선택
-    drugs_collection = DB.COLLECTION.DRUGS # 마약류 컬렉션 선택
+    argot_collection = Database.Collection.ARGOT # 은어 컬렉션 선택
+    drugs_collection = Database.Collection.DRUGS # 마약류 컬렉션 선택
 
     argot_list, drugs_list, argot_names = [], [], []
     # 은어가 메세지에서 발견될 경우 발견된 은어들과 그 은어에 대응하는 마약류를 리스트로 생성
@@ -117,7 +114,8 @@ async def process_message(entity, client, message) -> None:
             # 먼저 은어 노드가 데이터베이스에 없을 경우 추가
             summary = run_cypher(query=Neo4j.QueryTemplate.Node.Argot.MERGE,
                                  parameters={
-                                     "name": argot_name
+                                     "name": argot_name,
+                                     "drugId": argot.get("drugId"),
                                  }).consume()
             if summary.counters.nodes_created > 0:
                 logger.info(f"새로운 마약 용어가 발견되어 Neo4j 데이터베이스에 추가되었습니다. 발견된 채널의 ID: {entity.id}, 은어: `{argot_name}`")
@@ -154,9 +152,10 @@ async def process_message(entity, client, message) -> None:
     # channelId 필드와 id 필드를 기준으로 이미 채팅이 수집되었는지 검사한 후, 아직 수집되지 않았을 경우에만 삽입
     if not chat_collection.find_one({"channelId": entity.id, "id": message.id}):
         # GCS 버킷에 이미 해당 채팅의 파일이 존재하는지 검사하고, 존재하지 않을 경우에만 미디어를 다운로드해서 버킷에 저장
-        if not gcs_file_exists(bucket_name=default_bucket_name,
-                           folder_name=entity.id,
-                           file_name=message.id):
+        media_info = check_gcs_object_and_get_info(bucket_name=default_bucket_name,
+                                                   folder_name=entity.id,
+                                                   file_name=message.id)
+        if not media_info:
             media_data, media_type = await download_media(message, client)
             if media_data:
                 try:
@@ -177,7 +176,7 @@ async def process_message(entity, client, message) -> None:
                 media = None
         else:
             logger.warning("GCS 버킷에 이미 해당 채팅의 미디어가 저장되어 있습니다. 미디어 저장을 건너뜁니다.")
-            media = None
+            media = media_info
 
         post_data = {
             "channelId": entity.id,

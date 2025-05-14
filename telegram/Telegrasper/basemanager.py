@@ -74,28 +74,27 @@ class TelegramBaseManager:
                 self.loop = background_loop
                 background_loop.run_until_complete(self.start_client())
                 self.my_user_id = background_loop.run_until_complete(self.get_me())
+                super().__init__()
             else:
                 # 만약 현재 실행 흐름이 백그라운드 스레드가 아닐 경우(메인 스레드일 경우), 기존 값이 있으면 그대로 두고 없으면 None으로 초기화한다.
                 self.client = getattr(self, "client", None)
                 self.my_user_id = getattr(self, "my_user_id", None)
                 self.loop = getattr(self, "loop", None)
 
-            super().__init__()
-
     async def start_client(self) -> None:
         """ 텔레그램 클라이언트를 초기화하고 시작, 초기화된 클라이언트를 반환하는 메서드 """
         if threading.current_thread() is threading.main_thread():
-            error_message = "Telegram Singleton을 메인 스레드에서 실행하고 있습니다. Flask 서버가 제대로 실행되지 않을 수 있습니다."
-            logger.warning(error_message)
-            raise RuntimeWarning(error_message)
+            message = "Telegram Singleton을 메인 스레드에서 실행하고 있습니다. Flask 서버가 제대로 실행되지 않을 수 있습니다."
+            logger.warning(message)
+            raise RuntimeWarning(message)
         if not self.loop:
-            error_message = "Loop를 생성하지 않은 상태로 텔레그램 클라이언트를 시작하려고 시도했습니다."
-            logger.critical(error_message)
-            raise ValueError(error_message)
+            message = "Loop를 생성하지 않은 상태로 텔레그램 클라이언트를 시작하려고 시도했습니다."
+            logger.critical(message)
+            raise ValueError(message)
         elif not isinstance(self.loop, asyncio.AbstractEventLoop):
-            error_message = "Loop가 이벤트 루프 객체(AbstractEventLoop)가 아닌 상태로 텔레그램 클라이언트를 시작하려고 시도했습니다."
-            logger.critical(error_message)
-            raise TypeError(error_message)
+            message = "Loop가 이벤트 루프 객체(AbstractEventLoop)가 아닌 상태로 텔레그램 클라이언트를 시작하려고 시도했습니다."
+            logger.critical(message)
+            raise TypeError(message)
 
         self.client = TelegramClient(ds.number, ds.apiID, ds.apiHash, loop=self.loop)
         # loop를 미리 지정해 두고, 그 loop에서 run_until_complete로 실행한 start()이다.

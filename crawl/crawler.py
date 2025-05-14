@@ -1,7 +1,9 @@
-from preprocess import extractor
 import os
+import sys
 import requests
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from server.logger import logger
+from preprocess.extractor import extract_telegram_links
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
@@ -37,7 +39,7 @@ def google_search(query:str, num_results:int=10, api_key:str=API_KEY, search_eng
         # 검색 결과가 있을 경우 검색 결과로 나온 링크를 순회
         for item in data["items"]:
             link = item["link"]
-            extracted_telegram_links = extractor.extract_telegram_links(link)
+            extracted_telegram_links = extract_telegram_links(link)
             # 추출된 텔레그램 링크가 있을 경우 텔레그램 항목에 추가
             # Google 검색 결과이기 때문에 반환된 텔레그램 주소 목록은 1개뿐이고, 때문에 index=0만 바로 사용
             if extracted_telegram_links:
@@ -73,6 +75,7 @@ def search_links(queries: list[str], max_results: int) -> dict:  # 만약 로컬
     else:
         logger.info(f"검색어 {len(queries)}개에 대한 검색 결과: URL {len(all_urls)}개, Telegram 채널 {len(all_telegrams)}")
 
+    
     # URL들과 텔레그램 채널 결과를 합쳐서 딕셔너리로 결과 반환
     return {
         'google': list(all_urls),
@@ -100,3 +103,7 @@ def save_html(html:str, folder_path:str, file_name:str) -> None:
     with open(file_path, 'w', encoding='utf-8') as file:
         file.write(html)
     logger.info(f"HTML 다음 경로에 저장함: {file_name}")
+    
+    
+if __name__ == "__main__":
+    print(get_html_from_url(""))
