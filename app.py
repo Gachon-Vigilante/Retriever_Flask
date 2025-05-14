@@ -24,14 +24,14 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 # 모든 Blueprint 등록
-from crawl import crawl_bp
-app.register_blueprint(crawl_bp)
-from preprocess import preprocess_bp
-app.register_blueprint(preprocess_bp)
-from telegram import telegram_bp
-app.register_blueprint(telegram_bp)
-from watson import watson_bp
-app.register_blueprint(watson_bp)
+# from crawl import crawl_bp
+# app.register_blueprint(crawl_bp)
+# from preprocess import preprocess_bp
+# app.register_blueprint(preprocess_bp)
+# from telegram import telegram_bp
+# app.register_blueprint(telegram_bp)
+# from watson import watson_bp
+# app.register_blueprint(watson_bp)
 from clustering import cluster_bp
 app.register_blueprint(cluster_bp)
 
