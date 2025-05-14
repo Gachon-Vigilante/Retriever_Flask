@@ -2,10 +2,12 @@ from flask import Blueprint, request, jsonify
 from typing import Literal
 
 from utils import confirm_request
-from .watson import Watson
+from .watson import Watson, WatsonRegistry
 from server.logger import logger
 
 watson_bp = Blueprint('watson', __name__, url_prefix='/watson')
+
+WatsonRegistry.load_existing_bots()
 
 @watson_bp.route('/c', methods=['POST'])
 def chat_with_watson():
@@ -25,7 +27,7 @@ def chat_with_watson():
     if data['action'] == "ask":
         return ask_watson(bot, data)
     elif data['action'] == "reset":
-        bot.clear_message_history()
+        bot.clear_memory()
         return jsonify({"success": True}), 200
 
 
@@ -40,3 +42,5 @@ def ask_watson(bot, data):
     except Exception as e:
         logger.error(e)
         return jsonify({"answer": f"죄송합니다. 에러가 발생했습니다. 시스템, 또는 AI를 제공하는 외부 API의 문제일 수 있습니다."}), 500
+
+

@@ -30,18 +30,18 @@ from preprocess import preprocess_bp
 app.register_blueprint(preprocess_bp)
 from telegram import telegram_bp
 app.register_blueprint(telegram_bp)
-from watson import watson_bp
+from rag import watson_bp # 당분간은 watson 사용 안함
 app.register_blueprint(watson_bp)
 from clustering import cluster_bp
 app.register_blueprint(cluster_bp)
 
 # 등록된 모든 라우트 출력
-with app.app_context():
-    all_routes = ""
-    for rule in app.url_map.iter_rules():
-        all_routes += f"{rule.endpoint:20s} | {rule.methods} | {rule}\n"
-    logger.debug(all_routes)
+# with app.app_context():
+#     all_routes = ""
+#     for rule in app.url_map.iter_rules():
+#         all_routes += f"{rule.endpoint:20s} | {rule.methods} | {rule}\n"
+#     logger.debug(all_routes)
 
 if __name__ == "__main__":
     logger.info("Flask server has started!")
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5050)
