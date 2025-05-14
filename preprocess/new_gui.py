@@ -13,12 +13,27 @@ from PyQt5.QtCore import QUrl
 
 # JS 감시용 페이지
 class MonitoringPage(QWebEnginePage):
+    """웹 페이지의 JavaScript 로그를 모니터링하는 클래스입니다."""
+
     def __init__(self, parent=None):
+        """모니터링 페이지를 초기화합니다.
+
+        Args:
+            parent: 부모 위젯
+        """
         super().__init__(parent)
         self.js_logs = []
         self.interrupt_threshold = 10  # JS 로그 30개 넘으면 fallback 트리거
 
     def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
+        """JavaScript 콘솔 메시지를 처리합니다.
+
+        Args:
+            level: 로그 레벨
+            message: 로그 메시지
+            lineNumber: 라인 번호
+            sourceID: 소스 ID
+        """
         print(f"[JS] {message}")
         self.js_logs.append(message)
 
@@ -32,7 +47,10 @@ class MonitoringPage(QWebEnginePage):
 
 
 class DrugPromotionDetector(QMainWindow):
+    """마약 홍보글 검사 도구의 GUI 애플리케이션 클래스입니다."""
+
     def __init__(self):
+        """GUI 애플리케이션을 초기화합니다."""
         super().__init__()
         self.current_index = 0
         self.df = None
@@ -41,6 +59,7 @@ class DrugPromotionDetector(QMainWindow):
         self.initUI()
 
     def initUI(self):
+        """GUI 컴포넌트들을 초기화하고 배치합니다."""
         self.setWindowTitle('Drug Promotion Detector')
         self.setGeometry(100, 100, 1200, 800)
 
@@ -104,6 +123,7 @@ class DrugPromotionDetector(QMainWindow):
         open_action.triggered.connect(self.open_file)
 
     def open_file(self):
+        """엑셀 파일을 선택하고 데이터를 로드합니다."""
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx)")
         if file_path:
             self.file_path = file_path
@@ -112,12 +132,14 @@ class DrugPromotionDetector(QMainWindow):
             self.load_current_url()
 
     def find_start_index(self):
+        """처리되지 않은 URL의 인덱스를 찾습니다."""
         for i in range(len(self.df)):
             if self.df.iloc[i, self.result_col_index] == "":
                 self.current_index = i
                 return
 
     def load_current_url(self):
+        """현재 인덱스의 URL을 웹뷰에 로드합니다."""
         if not self.web_view:
             QMessageBox.critical(self, "오류", "웹뷰가 아직 초기화되지 않았습니다!")
             return
@@ -133,6 +155,7 @@ class DrugPromotionDetector(QMainWindow):
         self.comment.clear()
 
     def fallback_to_html(self):
+        """웹뷰 로드 실패 시 HTML 직접 파싱으로 대체합니다."""
         url = self.df.iloc[self.current_index, 0]
         if not url.startswith("http"):
             url = "http://" + url
@@ -160,6 +183,11 @@ class DrugPromotionDetector(QMainWindow):
             self.extracted_text.setPlainText(f"[ERROR] 본문 추출 실패: {e}")
 
     def save_result(self, label):
+        """현재 URL의 검사 결과를 저장하고 다음 URL로 이동합니다.
+
+        Args:
+            label: 검사 결과 라벨 ("P" 또는 "NP")
+        """
         self.df.iloc[self.current_index, self.result_col_index] = label
         self.df.iloc[self.current_index, self.result_col_index + 1] = self.comment.toPlainText()
         try:
@@ -172,15 +200,22 @@ class DrugPromotionDetector(QMainWindow):
         self.load_current_url()
 
     def prev_url(self):
+        """이전 URL로 이동합니다."""
         if self.current_index > 0:
             self.current_index -= 1
             self.load_current_url()
 
     def next_url(self):
+        """다음 URL로 이동합니다."""
         self.current_index += 1
         self.load_current_url()
 
     def show_message(self, message):
+        """메시지 박스를 표시합니다.
+
+        Args:
+            message: 표시할 메시지
+        """
         QMessageBox.information(self, "알림", message)
 
 

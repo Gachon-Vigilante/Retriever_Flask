@@ -8,6 +8,14 @@ from server.db import Database
 from typing import Optional, Union
 
 def extract_text_blocks_from_html(html) -> list:
+    """HTML 문서에서 텍스트 블록을 추출합니다.
+
+    Args:
+        html: HTML 문서 문자열
+
+    Returns:
+        list: 추출된 텍스트 블록 목록. 빈 줄은 제거됨
+    """
     if not html:
         return []
 
@@ -56,6 +64,14 @@ for argot in argot_collection.find():
 
 # 텍스트 길이가 가장 길고 특정 텍스트를 포함하는 원소를 반환하는 함수
 def extract_by_length(strings: Union[str, list[str]]) -> Optional[str]:
+    """텍스트 길이가 가장 길고 특정 텍스트를 포함하는 원소를 반환합니다.
+
+    Args:
+        strings: 검사할 문자열 또는 문자열 목록
+
+    Returns:
+        Optional[str]: 조건에 맞는 가장 긴 문자열. 조건에 맞는 문자열이 없으면 None
+    """
     # 은어/약어 사전에 맞는 문자열들을 필터링
     filtered_strings = [chunk for chunk in strings if sum(keyword in chunk for keyword in argot_dictionary) >= 3]
 
@@ -65,6 +81,16 @@ def extract_by_length(strings: Union[str, list[str]]) -> Optional[str]:
 
 # HTML 텍스트에서 마약 홍보에 관련된 유의미한 글 내용을 추출하고, 발견된 텔레그램 주소가 있다면 주소까지 반환하는 함수
 def extract_promotion_content(html: str) -> dict[str, str]:
+    """HTML 텍스트에서 마약 홍보에 관련된 유의미한 글 내용을 추출합니다.
+
+    Args:
+        html: HTML 문서 문자열
+
+    Returns:
+        dict: 추출된 내용을 포함하는 딕셔너리
+            - promotion_content: 추출된 홍보 내용
+            - telegrams: 발견된 텔레그램 주소 목록
+    """
     # 전체 HTMl 텍스트를 블록으로 분할하여 유의미한 텍스트를 추출해보고, 없다면 None 저장
     logger.debug(f"HTML 텍스트에서 마약 홍보 관련 내용 추출 시작. 텍스트 길이: {len(html)}")
     extracted_content = extract_by_length(text_blocks := extract_text_blocks_from_html(html))
@@ -83,6 +109,14 @@ import re
 
 # 텍스트에서 텔레그램 링크들을 식별해서 리스트로 묶어 반환하는 함수
 def extract_telegram_links(data: Union[str, list[str]]) -> list[str]:
+    """텍스트에서 텔레그램 링크들을 식별하여 리스트로 반환합니다.
+
+    Args:
+        data: 검사할 문자열 또는 문자열 목록
+
+    Returns:
+        list[str]: 발견된 텔레그램 링크 목록
+    """
     telegram_pattern = r"(?i)(?:https?://)?t\.me/(?:s/|joinchat/)?([~+]?[a-zA-Z0-9_-]+)(?:/\d+)?"
 
     if not data:

@@ -6,7 +6,12 @@ import mimetypes
 
 
 def create_folder(bucket_name, folder_name):
-    """ 가상의 폴더를 GCS 버킷에 추가하는 함수 """
+    """GCS 버킷에 가상 폴더를 생성합니다.
+
+    Args:
+        bucket_name: GCS 버킷 이름
+        folder_name: 생성할 폴더 이름
+    """
     client = storage.Client()
     bucket = client.bucket(bucket_name)
 
@@ -15,7 +20,16 @@ def create_folder(bucket_name, folder_name):
     blob.upload_from_string("")  # 빈 파일 업로드
 
 def gcs_file_exists(bucket_name: str, folder_name: str, file_name: str) -> bool:
-    """특정 파일이 GCS 버킷에 이미 있는지 확인하는 함수."""
+    """GCS 버킷에 특정 파일이 존재하는지 확인합니다.
+
+    Args:
+        bucket_name: GCS 버킷 이름
+        folder_name: GCS 폴더 이름
+        file_name: 확인할 파일 이름
+
+    Returns:
+        bool: 파일이 존재하면 True, 아니면 False
+    """
     client = storage.Client()
     bucket = client.bucket(bucket_name)
 
@@ -25,14 +39,16 @@ def gcs_file_exists(bucket_name: str, folder_name: str, file_name: str) -> bool:
     return blob.exists() # 파일의 존재 여부를 확인해서 반환
 
 def check_gcs_object_and_get_info(bucket_name: str, folder_name: str, file_name: str) -> Optional[dict]:
-    """
-    GCS 버킷에 특정 객체가 존재하는지 확인하고,
-    존재하면 공개 URL과 MIME 타입을 반환한다.
+    """GCS 버킷의 객체 존재 여부를 확인하고 정보를 반환합니다.
 
-    :param bucket_name: GCS 버킷 이름
-    :param folder_name: GCS 폴더 이름
-    :param file_name: GCS 파일 이름
-    :return: {"url": ..., "content_type": ...} 또는 None
+    Args:
+        bucket_name: GCS 버킷 이름
+        folder_name: GCS 폴더 이름
+        file_name: 확인할 파일 이름
+
+    Returns:
+        Optional[dict]: 객체가 존재하면 {"url": 공개 URL, "type": MIME 타입}을 반환,
+                       존재하지 않으면 None을 반환
     """
     object_name = f"{folder_name}/{file_name}"
     client = storage.Client()
@@ -56,7 +72,18 @@ def check_gcs_object_and_get_info(bucket_name: str, folder_name: str, file_name:
     }
 
 def upload_bytes_to_gcs(bucket_name, folder_name, file_name, file_bytes, content_type):
-    """ 바이트 객체를 GCS 버킷에 추가하는 함수."""
+    """바이트 데이터를 GCS 버킷에 업로드합니다.
+
+    Args:
+        bucket_name: GCS 버킷 이름
+        folder_name: GCS 폴더 이름
+        file_name: 업로드할 파일 이름
+        file_bytes: 업로드할 바이트 데이터
+        content_type: 파일의 MIME 타입
+
+    Returns:
+        str: 업로드된 파일의 공개 URL
+    """
     client = storage.Client()
     bucket = client.bucket(bucket_name)
 

@@ -31,12 +31,28 @@ class AnsiCode:
 
 # Following from Python cookbook, #475186
 def has_colors(stream):
+    """터미널이 컬러 출력을 지원하는지 확인합니다.
+
+    Args:
+        stream: 출력 스트림 객체
+
+    Returns:
+        bool: 터미널이 컬러 출력을 지원하면 True, 아니면 False
+    """
     import curses
     curses.setupterm()
     return curses.tigetnum("colors") > 2
 
 
 def print_colored(color=AnsiCode.BRIGHT_WHITE_TEXT):
+    """컬러 출력을 지원하는 경우와 그렇지 않은 경우에 대한 로그 포맷을 반환합니다.
+
+    Args:
+        color: 사용할 ANSI 컬러 코드 (기본값: 밝은 흰색)
+
+    Returns:
+        str: 로그 포맷 문자열
+    """
     if has_colors(sys.stdout):
         # 문자열 포매팅 후 반환
         log_format = "[%(asctime)s] %(levelname)7s in %(module)s: %(message)s"
@@ -194,6 +210,11 @@ if __name__ == '__main__':
 
 # 쓰이지 않지만 나중을 위해 남겨둔 함수. flask logger를 변경하는 함수이다.
 def customize_flask_logger(flask_app):
+    """Flask 애플리케이션의 로거를 커스터마이즈합니다.
+
+    Args:
+        flask_app: Flask 애플리케이션 인스턴스
+    """
     # Flask 기본 로거 설정 제거
     del flask_app.logger.handlers[:]
 

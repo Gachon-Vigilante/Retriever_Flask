@@ -9,6 +9,11 @@ from pymongo.synchronous.database import Database
 load_dotenv()
 
 def get_mongo_connection_string() -> str:
+    """MongoDB 연결 문자열을 환경 변수에서 가져옵니다.
+
+    Returns:
+        str: MongoDB 연결 문자열
+    """
     return os.getenv("MONGO_CONNECTION_STRING")
 
 mongo_client = pymongo.MongoClient(get_mongo_connection_string()) # MongoDB 클라이언트 생성
