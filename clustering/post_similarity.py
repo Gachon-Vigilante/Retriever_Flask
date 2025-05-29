@@ -1,87 +1,121 @@
-from pymongo import MongoClient
-import torch
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import AutoTokenizer, AutoModel
 from bs4 import BeautifulSoup
 import numpy as np
 
 from server.db import Database
+from server.cypher import run_cypher, Neo4j # 네오4j 쿼리 실행 함수
 
-# MongoDB 연결
+
+# MongoDB 컬렉션
 collection = Database.Collection.POST
-similarity_collection = Database.Collection.POST_SIMILARITY  # 유사도 결과 저장 컬렉션
+similarity_collection = Database.Collection.POST_SIMILARITY
 
-# KoBERT 모델 및 토크나이저 로드
-model_name = "monologg/kobert"
-tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
+# Ko-SBERT 모델 로드
+try:
+    model = SentenceTransformer('snunlp/KR-SBERT-V40K-klueNLI-augSTS')
+except Exception as e:
+    print(f"Error loading SentenceTransformer model: {e}")
+    raise
 
-# 텍스트 데이터 불러오기
+def preprocess_text(text):
+    soup = BeautifulSoup(text, 'html.parser')
+    return soup.get_text(separator=' ').strip()
+
+def get_bert_embedding(text: str) -> np.ndarray:
+    """문자열 입력받아 Ko-SBERT 임베딩 벡터 반환"""
+    return model.encode(text).astype(np.float64)
+
+# Neo4j에 유사도 관계 삽입
+def insert_post_similarity(link1: str, link2: str, score: float):
+    query = """
+    MATCH (a:Post {link: $link1}), (b:Post {link: $link2})
+    MERGE (a)-[r:SIMILAR]->(b)
+    SET r.score = $score
+    """
+    run_cypher(query, {"link1": link1, "link2": link2, "score": score})
+
+# 문서 가져오기
 def fetch_documents():
     documents = collection.find({}, {
         "_id": 1,
+        "link": 1,
+        "siteName": 1,
         "content": 1,
         "createdAt": 1,
-        "updatedAt": 1
+        "updatedAt": 1,
+        "deleted": 1
     })
 
     return [{
-        "_id": str(doc["_id"]),
-        "postId": str(doc["_id"]),  # _id를 postId로 사용
-        "text": doc.get("content", "").strip(),
+        "postId": str(doc["_id"]),
+        "link": doc.get("link", ""),
+        "siteName": doc.get("siteName", ""),
+        "content": doc.get("content", ""),
+        "text": preprocess_text(doc.get("content", "")),
         "createdAt": doc.get("createdAt"),
-        "updatedAt": doc.get("updatedAt", doc.get("createdAt"))
+        "updatedAt": doc.get("updatedAt", doc.get("createdAt")),
+        "deleted": doc.get("deleted", False)
     } for doc in documents if doc.get("content", "").strip()]
 
-# 텍스트 전처리
-def preprocess_text(text):
-    soup = BeautifulSoup(text, 'html.parser')  # 혹시 HTML 태그 포함된 경우 제거
-    return soup.get_text(separator=' ').strip()
-
-# KoBERT 임베딩 생성
-def get_bert_embedding(text):
-    tokens = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding="max_length")
-    with torch.no_grad():
-        output = model(**tokens)
-    embedding = output.last_hidden_state.mean(dim=1).squeeze().tolist()
-    return embedding
-
-# 유사도 분석 및 MongoDB 저장
+# 전체 파이프라인 실행
 def post_similarity():
     documents = fetch_documents()
     if not documents:
         return {"message": "No documents found."}
 
-    # 텍스트 전처리 및 임베딩
-    embeddings = []
-    for doc in documents:
-        clean_text = preprocess_text(doc["text"])
-        embedding = get_bert_embedding(clean_text)
-        embeddings.append(embedding)
-
-    # 코사인 유사도 계산
+    # 임베딩
+    embeddings = [get_bert_embedding(doc["text"]) for doc in documents]
     similarity_matrix = cosine_similarity(np.array(embeddings))
 
-    # 기존 결과 초기화
+    # MongoDB 기존 결과 초기화
     similarity_collection.delete_many({})
 
-    # 유사도 결과 저장 준비
     bulk_data = []
-    for idx, doc in enumerate(documents):
-        similarities = [
-            {"similarPost": documents[jdx]["postId"], "similarity": float(score)}
-            for jdx, score in enumerate(similarity_matrix[idx]) if idx != jdx
-        ]
+    for i, doc in enumerate(documents):
+        similarities = []
+        for j, score in enumerate(similarity_matrix[i]):
+            if i == j:
+                continue
 
+            other_doc = documents[j]
+            similarities.append({
+                "similarPost": other_doc["postId"],
+                "similarity": float(score)
+            })
+
+            # Neo4j에 유사도 저장 (단방향 조건: link1 < link2, 그리고 0.7 이상)
+            link1 = doc["link"]
+            link2 = other_doc["link"]
+            if score >= 0.7 and link1 < link2:
+                # 두 노드 모두 MERGE
+                run_cypher(Neo4j.QueryTemplate.Node.Post.MERGE, {
+                    "link": link1,
+                    "siteName": doc["siteName"],
+                    "content": doc["content"],
+                    "createdAt": doc["createdAt"],
+                    "updatedAt": doc["updatedAt"],
+                    "deleted": doc["deleted"]
+                })
+                run_cypher(Neo4j.QueryTemplate.Node.Post.MERGE, {
+                    "link": link2,
+                    "siteName": other_doc["siteName"],
+                    "content": other_doc["content"],
+                    "createdAt": other_doc["createdAt"],
+                    "updatedAt": other_doc["updatedAt"],
+                    "deleted": other_doc["deleted"]
+                })
+                insert_post_similarity(link1, link2, score)
+
+        # MongoDB에 저장할 데이터
         bulk_data.append({
             "postId": doc["postId"],
             "similarPosts": similarities,
             "updatedAt": doc["updatedAt"]
         })
 
+    # MongoDB 저장
     if bulk_data:
         similarity_collection.insert_many(bulk_data)
 
-    return {"message": "Similarity calculations stored successfully in MongoDB."}
-
-
+    return {"message": "Similarity calculations completed and stored in MongoDB & Neo4j."}
