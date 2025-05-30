@@ -32,3 +32,6 @@ vectorstore/**
 .session-journal
 
 credentials/
+
+# umap 모델 등을 저장하는 pickle 파일 무시
+.pkl

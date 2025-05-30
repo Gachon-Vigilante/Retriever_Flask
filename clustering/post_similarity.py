@@ -91,19 +91,19 @@ def post_similarity():
                 # 두 노드 모두 MERGE
                 run_cypher(Neo4j.QueryTemplate.Node.Post.MERGE, {
                     "link": link1,
-                    "siteName": doc["siteName"],
-                    "content": doc["content"],
-                    "createdAt": doc["createdAt"],
-                    "updatedAt": doc["updatedAt"],
-                    "deleted": doc["deleted"]
+                    "siteName": doc.get("source"),
+                    "content": doc.get("content"),
+                    "createdAt": doc.get("createdAt"),
+                    "updatedAt": doc.get("updatedAt"),
+                    "deleted": doc.get("deleted"),
                 })
                 run_cypher(Neo4j.QueryTemplate.Node.Post.MERGE, {
                     "link": link2,
-                    "siteName": other_doc["siteName"],
-                    "content": other_doc["content"],
-                    "createdAt": other_doc["createdAt"],
-                    "updatedAt": other_doc["updatedAt"],
-                    "deleted": other_doc["deleted"]
+                    "siteName": other_doc.get("source"),
+                    "content": other_doc.get("content"),
+                    "createdAt": other_doc.get("createdAt"),
+                    "updatedAt": other_doc.get("updatedAt"),
+                    "deleted": other_doc.get("deleted"),
                 })
                 insert_post_similarity(link1, link2, score)
 
