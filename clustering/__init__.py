@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, Response
 from .channel import calculate_and_store_channel_similarity
 from .channel_come_in import calculate_similarity_for_new_channels
+from .newpost_similarity import new_post_insert
 from .post_similarity import post_similarity
 from .post import handle_new_posts, maybe_recluster, perform_clustering_with_HDBSCAN
 
@@ -31,8 +32,9 @@ def update_new_channel():
 # '/post.py' 엔드포인트
 @cluster_bp.route('/post_update', methods=['POST'])
 def new_post():
-    result = handle_new_posts()
-    return jsonify(result), 200
+    result1 = new_post_insert()
+    result2 = handle_new_posts()
+    return jsonify(result1,result2), 200
 
 @cluster_bp.route('/post_recluster', methods=['POST'])
 def recluster_api():
