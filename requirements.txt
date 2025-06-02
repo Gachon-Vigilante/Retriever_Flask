@@ -183,6 +183,7 @@ jiter==0.9.0
 joblib==1.5.0
     # via
     #   nltk
+    #   pynndescent
     #   scikit-learn
 jsonpatch==1.33
     # via langchain-core
@@ -237,6 +238,10 @@ langsmith==0.3.42
     #   langchain
     #   langchain-community
     #   langchain-core
+llvmlite==0.44.0
+    # via
+    #   numba
+    #   pynndescent
 lz4==4.4.4
     # via pinecone-client
 markupsafe==3.0.2
@@ -269,12 +274,17 @@ networkx==3.4.2
     #   torch
 nltk==3.9.1
     # via pinecone-text
+numba==0.61.2
+    # via
+    #   pynndescent
+    #   umap-learn
 numpy==1.26.4
     # via
     #   -r requirements.in
     #   kiwipiepy
     #   langchain-community
     #   langchain-weaviate
+    #   numba
     #   pandas
     #   pinecone-text
     #   python-louvain
@@ -282,6 +292,7 @@ numpy==1.26.4
     #   scikit-learn
     #   scipy
     #   transformers
+    #   umap-learn
 olefile==0.47
     # via langchain-teddynote
 openai==1.77.0
@@ -377,6 +388,8 @@ pymongo==4.11.3
     #   -r requirements.in
     #   langgraph-checkpoint-mongodb
     #   motor
+pynndescent==0.5.13
+    # via umap-learn
 pysocks==1.7.1
     # via urllib3
 python-dateutil==2.9.0.post0
@@ -433,9 +446,15 @@ rsa==4.9.1
 safetensors==0.5.3
     # via transformers
 scikit-learn==1.6.1
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   pynndescent
+    #   umap-learn
 scipy==1.15.2
-    # via scikit-learn
+    # via
+    #   pynndescent
+    #   scikit-learn
+    #   umap-learn
 selenium==4.32.0
     # via -r requirements.in
 sentencepiece==0.2.0
@@ -489,6 +508,7 @@ tqdm==4.67.1
     #   nltk
     #   openai
     #   transformers
+    #   umap-learn
 traitlets==5.14.3
     # via
     #   ipython
@@ -527,6 +547,8 @@ typing-inspection==0.4.0
     #   pydantic-settings
 tzdata==2025.2
     # via pandas
+umap-learn==0.5.7
+    # via -r requirements.in
 urllib3[socks]==2.4.0
     # via
     #   pinecone-client

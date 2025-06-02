@@ -49,7 +49,7 @@ def fetch_documents():
         "deleted": 1
     })
 
-    return [ {
+    return [{
         "postId": str(doc["_id"]),
         "link": doc.get("link", ""),
         "siteName": doc.get("siteName", ""),
@@ -59,7 +59,7 @@ def fetch_documents():
         "createdAt": doc.get("createdAt"),
         "updatedAt": doc.get("updatedAt", doc.get("createdAt")),
         "deleted": doc.get("deleted", False)
-    } for doc in documents if doc.get("content", "").strip() ]
+    } for doc in documents if doc.get("content", "").strip()]
 
 
 # 전체 파이프라인 실행
@@ -130,11 +130,11 @@ def post_similarity():
                 })
                 run_cypher(Neo4j.QueryTemplate.Node.Post.MERGE, {
                     "link": link2,
-                    "siteName": other_doc.get("siteName"),
-                    "content": other_doc.get("content"),
-                    "createdAt": other_doc.get("createdAt"),
-                    "updatedAt": other_doc.get("updatedAt"),
-                    "deleted": other_doc.get("deleted"),
+                    "siteName": other_doc["source"],
+                    "content": other_doc["content"],
+                    "createdAt": other_doc["createdAt"],
+                    "updatedAt": other_doc["updatedAt"],
+                    "deleted": other_doc["deleted"]
                 })
                 insert_post_similarity(link1, link2, score)
 

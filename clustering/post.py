@@ -6,7 +6,10 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 from collections import Counter
 from sentence_transformers import SentenceTransformer
+
+from server.cypher import run_cypher
 from server.db import Database
+from server.logger import logger
 from datetime import datetime
 import pickle
 import os
@@ -14,7 +17,7 @@ from dotenv import load_dotenv
 
 load_dotenv()  # .env 파일 읽어 환경변수로 설정
 
-UMAP_MODEL_PATH = os.getenv('UMAP_MODEL_PATH')
+UMAP_MODEL_PATH = os.path.join(os.path.dirname(__file__), "umap_model.pkl")
 
 # MongoDB 연결
 collection = Database.Collection.POST
@@ -38,13 +41,9 @@ def get_bert_embedding(text: str) -> np.ndarray:
 
 def save_umap_model(umap_model, path=UMAP_MODEL_PATH):
     """UMAP 모델을 지정 경로에 저장"""
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'wb') as f:
-            pickle.dump(umap_model, f)
-    except Exception as e:
-        print(f"Failed to save UMAP model: {e}")
-        raise
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'wb') as f:
+        pickle.dump(umap_model, f)
 
 def load_umap_model(path=UMAP_MODEL_PATH):
     """저장된 UMAP 모델 불러오기"""
@@ -54,7 +53,7 @@ def load_umap_model(path=UMAP_MODEL_PATH):
         with open(path, 'rb') as f:
             return pickle.load(f)
     except Exception as e:
-        print(f"Failed to load UMAP model: {e}")
+        logger.error(f"Failed to load UMAP model: {e}")
         return None
 
 def compute_centroids(embeddings: np.ndarray, labels: np.ndarray) -> dict:
@@ -142,12 +141,25 @@ def perform_clustering_with_HDBSCAN(min_cluster_size=5, n_neighbors=15, n_compon
 
     # DB 업데이트
     for idx, _id in enumerate(ids):
+        cluster_label = int(labels[idx])
         collection.update_one({"_id": _id}, {"$set": {
-            "cluster_label": int(labels[idx]),
+            "cluster_label": cluster_label,
             "embedding": embeddings[idx].tolist(),
             "umap_embedding": umap_embeddings[idx].tolist(),
             "assigned_by": "full"
         }})
+
+        run_cypher(query="""
+                             MERGE (p:Post {link: $link})
+                             ON MATCH SET
+                                 p.cluster = $cluster
+                             RETURN p
+                         """,
+                   parameters={
+                       "link": collection.find_one({"_id": _id}).get("link"),
+                       "cluster": cluster_label
+                   }
+       )
 
     # 클러스터 중심 저장
     centroid_dict = compute_centroids(umap_embeddings, labels)  # 기존 embeddings 대신 umap_embeddings로 계산하는게 더 정확
@@ -181,7 +193,7 @@ def handle_new_posts(threshold=0.6):
         try:
             emb_umap = umap_model.transform([emb])[0]
         except Exception as e:
-            print(f"UMAP transform failed for doc {doc['_id']}: {e}")
+            logger.warning(f"UMAP transform failed for doc {doc['_id']}: {e}")
             emb_umap = emb  # fallback: 원본 임베딩 사용
 
         label = assign_cluster(emb_umap, centroids, threshold)
@@ -201,7 +213,7 @@ def maybe_recluster(threshold_count=100):
     """
     count = collection.count_documents({"assigned_by": "centroid"})
     if count >= threshold_count:
-        print("Reclustering triggered...")
+        logger.info("Reclustering triggered...")
         result = perform_clustering_with_HDBSCAN()
         # 재할당된 문서들은 assigned_by를 "full"로 변경
         collection.update_many({"assigned_by": "centroid"}, {"$set": {"assigned_by": "full"}})
