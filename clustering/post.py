@@ -16,7 +16,7 @@ load_dotenv()  # .env 파일 읽어 환경변수로 설정
 
 UMAP_MODEL_PATH = os.getenv('UMAP_MODEL_PATH')
 
-# MongoDB 연결 (인덱스 생성 권장)
+# MongoDB 연결
 collection = Database.Collection.POST
 centroid_collection = Database.Collection.CENTER
 
