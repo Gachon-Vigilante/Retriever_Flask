@@ -2,6 +2,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from bs4 import BeautifulSoup
 import numpy as np
+from collections import Counter
 
 from server.db import Database
 from server.cypher import run_cypher, Neo4j # 네오4j 쿼리 실행 함수
@@ -42,21 +43,24 @@ def fetch_documents():
         "link": 1,
         "siteName": 1,
         "content": 1,
+        "promoSiteLink": 1,  # 추가
         "createdAt": 1,
         "updatedAt": 1,
         "deleted": 1
     })
 
-    return [{
+    return [ {
         "postId": str(doc["_id"]),
         "link": doc.get("link", ""),
         "siteName": doc.get("siteName", ""),
         "content": doc.get("content", ""),
+        "promoSiteLink": doc.get("promoSiteLink", []),  # 추가
         "text": preprocess_text(doc.get("content", "")),
         "createdAt": doc.get("createdAt"),
         "updatedAt": doc.get("updatedAt", doc.get("createdAt")),
         "deleted": doc.get("deleted", False)
-    } for doc in documents if doc.get("content", "").strip()]
+    } for doc in documents if doc.get("content", "").strip() ]
+
 
 # 전체 파이프라인 실행
 def post_similarity():
@@ -64,11 +68,39 @@ def post_similarity():
     if not documents:
         return {"message": "No documents found."}
 
-    # 임베딩
-    embeddings = [get_bert_embedding(doc["text"]) for doc in documents]
+    # promoSiteLink 추출
+    promo_links = [
+        doc.get("promoSiteLink", [])[0]
+        for doc in documents
+        if isinstance(doc.get("promoSiteLink", []), list) and doc["promoSiteLink"]
+    ]
+    link_counts = Counter(promo_links)
+
+    # 링크 사용 빈도 기반 weight 계산 (0~1)
+    max_count = max(link_counts.values()) if link_counts else 1
+    link_weights = {link: count / max_count for link, count in link_counts.items()}
+
+    # 링크 임베딩 사전 생성
+    promo_embeddings = {link: get_bert_embedding(link) for link in link_counts}
+
+    # 문서별 임베딩 생성
+    embeddings = []
+    for doc in documents:
+        doc_emb = get_bert_embedding(doc["text"])
+
+        promo = doc.get("promoSiteLink", [])
+        promo_link = promo[0] if isinstance(promo, list) and promo else None
+        promo_emb = promo_embeddings.get(promo_link)
+        weight = 0.3
+
+        # 가중 평균
+        combined_emb = (1 - weight) * doc_emb + weight * promo_emb if promo_emb is not None else doc_emb
+        embeddings.append(combined_emb)
+
+    # 유사도 계산
     similarity_matrix = cosine_similarity(np.array(embeddings))
 
-    # MongoDB 기존 결과 초기화
+    # 기존 MongoDB 유사도 데이터 삭제
     similarity_collection.delete_many({})
 
     bulk_data = []
@@ -84,37 +116,34 @@ def post_similarity():
                 "similarity": float(score)
             })
 
-            # Neo4j에 유사도 저장 (단방향 조건: link1 < link2, 그리고 0.7 이상)
+            # Neo4j 유사도 관계 삽입
             link1 = doc["link"]
             link2 = other_doc["link"]
             if score >= 0.7 and link1 < link2:
-                # 두 노드 모두 MERGE
                 run_cypher(Neo4j.QueryTemplate.Node.Post.MERGE, {
                     "link": link1,
-                    "siteName": doc["siteName"],
-                    "content": doc["content"],
-                    "createdAt": doc["createdAt"],
-                    "updatedAt": doc["updatedAt"],
-                    "deleted": doc["deleted"]
+                    "siteName": doc.get("siteName"),
+                    "content": doc.get("content"),
+                    "createdAt": doc.get("createdAt"),
+                    "updatedAt": doc.get("updatedAt"),
+                    "deleted": doc.get("deleted"),
                 })
                 run_cypher(Neo4j.QueryTemplate.Node.Post.MERGE, {
                     "link": link2,
-                    "siteName": other_doc["siteName"],
-                    "content": other_doc["content"],
-                    "createdAt": other_doc["createdAt"],
-                    "updatedAt": other_doc["updatedAt"],
-                    "deleted": other_doc["deleted"]
+                    "siteName": other_doc.get("siteName"),
+                    "content": other_doc.get("content"),
+                    "createdAt": other_doc.get("createdAt"),
+                    "updatedAt": other_doc.get("updatedAt"),
+                    "deleted": other_doc.get("deleted"),
                 })
                 insert_post_similarity(link1, link2, score)
 
-        # MongoDB에 저장할 데이터
         bulk_data.append({
             "postId": doc["postId"],
             "similarPosts": similarities,
             "updatedAt": doc["updatedAt"]
         })
 
-    # MongoDB 저장
     if bulk_data:
         similarity_collection.insert_many(bulk_data)
 
