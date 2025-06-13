@@ -12,11 +12,20 @@ cluster_bp = Blueprint('cluster', __name__, url_prefix='/cluster')
 def post_preprocess():
     try:
         emb_result = embeddings()
-        sim_result = similarity()
-        return jsonify(emb_result,sim_result), 200
+
+        return jsonify(emb_result), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# '/post_similarity.py' 엔드포인트
+@cluster_bp.route('/post_similarity', methods=['POST'])
+def post_preprocess():
+    try:
+        sim_result = similarity()
+
+        return jsonify(sim_result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 # '/channel.py' 엔드포인트
 @cluster_bp.route('/channels', methods=['POST'])
 def calculate_similarity():
