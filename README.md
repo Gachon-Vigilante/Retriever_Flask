@@ -3,9 +3,126 @@
 ## 1. 개요
 이 프로젝트는 텔레그램 채널 모니터링, 데이터 수집, 분석 및 RAG(Retrieval-Augmented Generation) 기능을 제공하는 Flask 기반 웹 애플리케이션입니다.
 
-## 2. 주요 컴포넌트
+## 2. 프로젝트 구조
 
-### 2.1 텔레그램 관리자 (TelegramManager)
+### 2.1 디렉토리 구조
+```
+Retriever_Flask/
+├── ai/                 # AI 모델 및 관련 유틸리티
+├── app.py             # Flask 애플리케이션 메인 파일
+├── clustering/        # 데이터 클러스터링 관련 모듈
+├── crawl/            # 웹 크롤링 및 데이터 수집 모듈
+├── management/       # 프로젝트 관리 및 설정 파일
+├── preprocess/       # 데이터 전처리 모듈
+├── rag/              # RAG(Retrieval-Augmented Generation) 관련 모듈
+├── server/           # 서버 관련 설정 및 유틸리티
+├── telegram/         # 텔레그램 API 연동 모듈
+├── test/            # 테스트 코드
+├── utils.py         # 공통 유틸리티 함수
+├── requirements.txt  # 프로젝트 의존성 목록
+└── requirements.in   # 핵심 의존성 목록
+```
+
+### 2.2 주요 모듈 설명
+
+#### 2.2.1 ai/
+- AI 모델 관리 및 추론
+- 텍스트 분석 및 분류
+- 자연어 처리 유틸리티
+
+#### 2.2.2 crawl/
+- 웹 크롤링 엔진
+- SerpAPI 연동
+- HTML 파싱 및 데이터 추출
+
+#### 2.2.3 telegram/
+- 텔레그램 클라이언트 관리
+- 채널 모니터링
+- 메시지 수집 및 처리
+
+#### 2.2.4 rag/
+- RAG 시스템 구현
+- 벡터 데이터베이스 연동
+- 질의응답 처리
+
+#### 2.2.5 preprocess/
+- 데이터 정제
+- 텍스트 전처리
+- 특징 추출
+
+#### 2.2.6 clustering/
+- 데이터 클러스터링
+- 유사도 분석
+- 패턴 탐지
+
+### 2.3 핵심 파일 설명
+
+#### 2.3.1 app.py
+```python
+# Flask 애플리케이션의 진입점
+# - 라우트 설정
+# - 미들웨어 구성
+# - 에러 핸들링
+```
+
+#### 2.3.2 utils.py
+```python
+# 공통 유틸리티 함수
+# - 데이터 처리
+# - 파일 입출력
+# - 헬퍼 함수
+```
+
+#### 2.3.3 requirements.txt
+```
+# 프로젝트 의존성
+Flask==2.0.1
+python-telegram-bot==13.7
+transformers==4.11.3
+...
+```
+
+### 2.4 아키텍처 개요
+
+```mermaid
+graph TD
+    A[Client] --> B[Flask App]
+    B --> C[Telegram Manager]
+    B --> D[RAG System]
+    C --> E[Channel Monitor]
+    C --> F[Message Processor]
+    D --> G[Vector DB]
+    D --> H[LLM]
+    B --> I[Web Crawler]
+    I --> J[SerpAPI]
+    I --> K[Custom Search]
+```
+
+### 2.5 데이터 흐름
+
+1. 데이터 수집
+   - 텔레그램 채널 모니터링
+   - 웹 크롤링
+   - API 요청
+
+2. 데이터 처리
+   - 전처리 및 정제
+   - 특징 추출
+   - 벡터화
+
+3. 데이터 저장
+   - MongoDB
+   - Neo4j
+   - Weaviate
+
+4. 데이터 활용
+   - RAG 기반 질의응답
+   - 패턴 분석
+   - 인사이트 도출
+
+## 3. 주요 컴포넌트
+
+### 3.1 텔레그램 관리자 (TelegramManager)
 텔레그램 채널 모니터링과 관리를 담당하는 핵심 클래스입니다.
 
 ```python
@@ -18,7 +135,7 @@ class TelegramManager(ConnectMethods, ChannelMethods, TelegramBaseManager, OnBoo
 - 메시지 수집 및 처리
 - 채널 정보 관리
 
-### 2.2 RAG 시스템
+### 3.2 RAG 시스템
 Watson 기반의 RAG 시스템을 제공합니다.
 
 ```python
@@ -32,7 +149,7 @@ class Watson(VectorStoreMethods, LangGraphMethods, MongoDBMethods, MemoryMethods
 - MongoDB와 Weaviate 연동
 - 그래프 기반 메모리 관리
 
-### 2.3 데이터베이스 관리
+### 3.3 데이터베이스 관리
 Neo4j와 MongoDB를 사용한 데이터 저장 및 관리 시스템입니다.
 
 ```python
@@ -45,9 +162,9 @@ class Neo4j:
 - 관계 쿼리
 - 데이터 업데이트
 
-## 3. API 엔드포인트
+## 4. API 엔드포인트
 
-### 3.1 텔레그램 관련 API
+### 4.1 텔레그램 관련 API
 
 #### 채널 연결
 ```http
@@ -80,7 +197,7 @@ Content-Type: application/json
 }
 ```
 
-### 3.2 RAG 관련 API
+### 4.2 RAG 관련 API
 
 #### 질의응답
 ```http
@@ -104,9 +221,9 @@ Content-Type: application/json
 }
 ```
 
-## 4. 데이터 모델
+## 5. 데이터 모델
 
-### 4.1 텔레그램 메시지
+### 5.1 텔레그램 메시지
 ```python
 class TelegramMessage:
     id: int
@@ -116,7 +233,7 @@ class TelegramMessage:
     media: Optional[Dict]
 ```
 
-### 4.2 채널 정보
+### 5.2 채널 정보
 ```python
 class Channel:
     id: int
@@ -126,9 +243,9 @@ class Channel:
     last_updated: datetime
 ```
 
-## 5. 설정
+## 6. 설정
 
-### 5.1 환경 변수
+### 6.1 환경 변수
 필요한 환경 변수들:
 - `TELEGRAM_API_ID`: 텔레그램 API ID
 - `TELEGRAM_API_HASH`: 텔레그램 API Hash
@@ -138,48 +255,48 @@ class Channel:
 - `NEO4J_PASSWORD`: Neo4j 비밀번호
 - `MONGODB_URI`: MongoDB 연결 URI
 
-## 6. 설치 및 실행
+## 7. 설치 및 실행
 
-### 6.1 의존성 설치
+### 7.1 의존성 설치
 ```bash
 pip install -r requirements.txt
 ```
 
-### 6.2 환경 변수 설정
+### 7.2 환경 변수 설정
 `.env.example` 파일을 `.env`로 복사하고 필요한 값들을 설정합니다.
 
-### 6.3 서버 실행
+### 7.3 서버 실행
 ```bash
 python app.py
 ```
 
-## 7. 에러 처리
+## 8. 에러 처리
 
-### 7.1 공통 에러 코드
+### 8.1 공통 에러 코드
 - 400: 잘못된 요청
 - 401: 인증 실패
 - 403: 권한 없음
 - 404: 리소스를 찾을 수 없음
 - 500: 서버 내부 오류
 
-### 7.2 텔레그램 관련 에러
+### 8.2 텔레그램 관련 에러
 - `InvalidChannelError`: 잘못된 채널 ID 또는 초대 링크
 - `ConnectionError`: 텔레그램 연결 실패
 - `MonitoringError`: 모니터링 시작/중지 실패
 
-## 8. 보안
+## 9. 보안
 
-### 8.1 인증
+### 9.1 인증
 - API 키 기반 인증
 - 텔레그램 세션 관리
 
-### 8.2 데이터 보안
+### 9.2 데이터 보안
 - 민감 정보 암호화
 - 안전한 데이터베이스 연결
 
-## 9. TelegramManager 상세 API
+## 10. TelegramManager 상세 API
 
-### 9.1 기본 관리자 (TelegramBaseManager)
+### 10.1 기본 관리자 (TelegramBaseManager)
 
 #### 클래스 개요
 ```python
@@ -234,7 +351,7 @@ async def get_me(self) -> int:
     """
 ```
 
-### 9.2 연결 관리 (ConnectMethods)
+### 10.2 연결 관리 (ConnectMethods)
 
 #### 클래스 개요
 ```python
@@ -280,7 +397,7 @@ async def connect_channel(self, channel_id: int = None, invite_link: str = None,
     """
 ```
 
-### 9.3 채널 관리 (ChannelMethods)
+### 10.3 채널 관리 (ChannelMethods)
 
 #### 클래스 개요
 ```python
@@ -323,7 +440,7 @@ async def get_channel_messages(self, channel_id: int, limit: int = 100) -> List[
     """
 ```
 
-### 9.4 모니터링 관리 (MonitorMethods)
+### 10.4 모니터링 관리 (MonitorMethods)
 
 #### 클래스 개요
 ```python
@@ -375,7 +492,7 @@ async def monitor_channel(self, channel_id: int) -> None:
     """
 ```
 
-### 9.5 부팅 관리 (OnBootMethods)
+### 10.5 부팅 관리 (OnBootMethods)
 
 #### 클래스 개요
 ```python
@@ -397,7 +514,7 @@ def resume_monitoring(self):
     """데이터베이스에 저장된 모든 활성 채널에 대한 모니터링을 재개합니다."""
 ```
 
-### 9.6 유틸리티 함수
+### 10.6 유틸리티 함수
 
 #### 메시지 처리
 ```python
@@ -439,9 +556,9 @@ async def download_media(message, client) -> Tuple[Optional[bytes], Optional[str
     """
 ```
 
-## 10. RAG 시스템 상세 API
+## 11. RAG 시스템 상세 API
 
-### 10.1 Watson 클래스
+### 11.1 Watson 클래스
 
 #### 클래스 개요
 ```python
@@ -491,7 +608,7 @@ def __init__(self, *, bot_id: Optional[int] = None, channel_ids: Optional[list[i
     """
 ```
 
-### 10.2 VectorStoreMethods 클래스
+### 11.2 VectorStoreMethods 클래스
 
 #### 클래스 개요
 ```python
@@ -550,7 +667,7 @@ def build_loader(ids: list[ObjectId]) -> MongodbLoader:
     """
 ```
 
-### 10.3 MappedMongodbLoader 클래스
+### 11.3 MappedMongodbLoader 클래스
 
 #### 클래스 개요
 ```python
@@ -587,7 +704,7 @@ async def aload(self) -> List[Document]:
     """
 ```
 
-### 10.4 LangGraphMethods 클래스
+### 11.4 LangGraphMethods 클래스
 
 #### 클래스 개요
 ```python
@@ -632,7 +749,7 @@ def ask(self: 'Watson', question: str):
     """
 ```
 
-### 10.5 LangGraphNodes 클래스
+### 11.5 LangGraphNodes 클래스
 
 #### 클래스 개요
 ```python
@@ -700,7 +817,7 @@ def generate(state: GraphState, channel_info: dict) -> GraphState:
     """
 ```
 
-### 10.6 유틸리티 함수
+### 11.6 유틸리티 함수
 
 #### 필터 파싱
 ```python
@@ -747,7 +864,7 @@ def update_state(state: GraphState, node_name: str, **updates) -> GraphState:
     """
 ```
 
-### 10.7 MemoryMethods 클래스
+### 11.7 MemoryMethods 클래스
 
 #### 클래스 개요
 ```python
@@ -777,7 +894,7 @@ checkpointer = MongoDBSaver(
 )
 ```
 
-### 10.8 MongoDBMethods 클래스
+### 11.8 MongoDBMethods 클래스
 
 #### 클래스 개요
 ```python
@@ -818,7 +935,7 @@ def get_channel_info(self: 'Watson') -> dict[str, dict[str, Any]]:
     """
 ```
 
-### 10.9 상수 및 설정
+### 11.9 상수 및 설정
 
 #### 데이터베이스 컬렉션
 ```python
@@ -844,7 +961,7 @@ weaviate_headers = {
 }
 ```
 
-### 10.10 Weaviate 유틸리티
+### 11.10 Weaviate 유틸리티
 
 #### Weaviate 연결
 ```python
@@ -868,7 +985,7 @@ class WeaviateClientContext:
         """컨텍스트 종료 시 클라이언트 연결을 닫습니다."""
 ```
 
-### 10.11 Watson 클래스 상세 설명
+### 11.11 Watson 클래스 상세 설명
 
 #### 클래스 구조
 ```python
@@ -919,11 +1036,11 @@ answer = watson.ask("채널에서 가장 인기 있는 메시지는 무엇인가
 watson.clear_memory()
 ```
 
-## 11. AI 모듈
+## 12. AI 모듈
 
-### 11.1 데이터 모델 (datamodel.py)
+### 12.1 데이터 모델 (datamodel.py)
 
-#### 11.1.1 Classification
+#### 12.1.1 Classification
 ```python
 class Classification(BaseModel):
     question_classification: Literal["data", "others"]
@@ -932,7 +1049,7 @@ class Classification(BaseModel):
 - `data`: 텔레그램 채널과 채팅 데이터 기반 질문
 - `others`: 일반적인 질문
 
-#### 11.1.2 Query
+#### 12.1.2 Query
 ```python
 class Query(BaseModel):
     collection: Literal["channel_info", "channel_data"]
@@ -942,7 +1059,7 @@ class Query(BaseModel):
 - `collection`: 쿼리할 컬렉션 지정
 - `pipeline`: MongoDB 집계 파이프라인
 
-#### 11.1.3 GraphState
+#### 12.1.3 GraphState
 ```python
 class GraphState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
@@ -953,7 +1070,7 @@ class GraphState(TypedDict):
 - 에이전트 상태를 정의하는 타입 딕셔너리
 - 메시지 시퀀스 관리 및 추가 동작 정의
 
-#### 11.1.4 SearchCondition
+#### 12.1.4 SearchCondition
 ```python
 class SearchCondition(BaseModel):
     query: Optional[str]
@@ -965,7 +1082,7 @@ class SearchCondition(BaseModel):
 - Weaviate 벡터 검색 조건을 정의하는 모델
 - 시맨틱 검색, 채널 ID, 시간 범위, 키워드 필터링 지원
 
-#### 11.1.5 Catalog
+#### 12.1.5 Catalog
 ```python
 class Catalog(BaseModel):
     chatIds: list[int]
@@ -973,44 +1090,44 @@ class Catalog(BaseModel):
 ```
 - 마약 가격 정보를 포함하는 채팅 메시지 ID 목록과 요약 정보
 
-### 11.2 지시사항 (indications.py)
+### 12.2 지시사항 (indications.py)
 
-#### 11.2.1 Indications.Generate
+#### 12.2.1 Indications.Generate
 - 채팅 기반 QA를 위한 프롬프트 템플릿
 - 마약 관련 은어 예시 포함
 - 채널 정보와 컨텍스트 기반 응답 생성
 
-#### 11.2.2 Indications.Classify
+#### 12.2.2 Indications.Classify
 - 사용자 질문을 'data' 또는 'others'로 분류하는 프롬프트
 - 텔레그램 채널/메시지 데이터 관련 질문 구분
 
-#### 11.2.3 Indications.Interpret
+#### 12.2.3 Indications.Interpret
 - Weaviate 쿼리 해석을 위한 프롬프트
 - 시맨틱 검색, 필터, 정렬 조건 추출
 - 가격 관련 쿼리 처리 규칙
 
-#### 11.2.4 Indications.Extract
+#### 12.2.4 Indications.Extract
 - 마약 가격 정보 추출을 위한 프롬프트
 - 가격, 수량, 단위 정보 구조화
 - 은어/단위 변환 규칙 포함
 
-### 11.3 텔레그램 분석 (telegram.py)
+### 12.3 텔레그램 분석 (telegram.py)
 
-#### 11.3.1 BinaryClassification
+#### 12.3.1 BinaryClassification
 ```python
 class BinaryClassification(BaseModel):
     binary_classification: bool
 ```
 - 텔레그램 채널의 마약 판매 여부를 판단하는 모델
 
-#### 11.3.2 check_telegram_by_openai
+#### 12.3.2 check_telegram_by_openai
 ```python
 def check_telegram_by_openai(message: str) -> bool
 ```
 - OpenAI를 사용하여 텔레그램 메시지의 마약 판매 여부 확인
 - 마약 관련 은어 감지 및 분석
 
-#### 11.3.3 Report
+#### 12.3.3 Report
 ```python
 class Report(BaseModel):
     report_type: Literal[
@@ -1024,16 +1141,197 @@ class Report(BaseModel):
 - 텔레그램 메시지에서 추출한 정보 보고서 모델
 - 다양한 보고서 유형과 설명 포함
 
-#### 11.3.4 Intelligence
+#### 12.3.4 Intelligence
 ```python
 class Intelligence(BaseModel):
     reports: list[Report]
 ```
 - 추출된 보고서 목록을 포함하는 정보 모델
 
-#### 11.3.5 get_reports_by_openai
+#### 12.3.5 get_reports_by_openai
 ```python
 def get_reports_by_openai(message: str) -> list[Report]
 ```
 - OpenAI를 사용하여 텔레그램 메시지에서 정보 추출
 - 다양한 유형의 보고서 생성
+
+## 13. 크롤링 API
+
+### 13.1 웹 크롤링 엔드포인트
+
+#### 13.1.1 일반 웹 검색 API
+```http
+POST /crawl/links
+Content-Type: application/json
+
+{
+    "queries": ["검색어1", "검색어2"],
+    "max_results": 10
+}
+```
+
+주요 기능:
+- Google Custom Search API를 사용한 웹 검색
+- 일반 URL과 텔레그램 채널 링크 분리 추출
+- 중복 제거 및 결과 병합
+
+#### 13.1.2 SerpAPI 검색
+```http
+GET /crawl/links/serpapi?q=검색어1&q=검색어2&max_results=10
+```
+
+주요 기능:
+- SerpAPI를 통한 Google 검색
+- 한국어/한국 지역 기반 검색 결과
+- 페이지네이션을 통한 결과 수집
+
+#### 13.1.3 HTML 내용 가져오기
+```http
+POST /crawl/html
+Content-Type: application/json
+
+{
+    "link": "https://example.com"
+}
+```
+
+주요 기능:
+- 지정된 URL의 HTML 내용 추출
+- 사용자 에이전트 헤더 사용
+- 오류 처리 및 로깅
+
+### 13.2 크롤러 모듈 (crawler.py)
+
+#### 13.2.1 Google 검색
+```python
+def google_search(query: str, num_results: int = 10) -> dict[str:list, str:list]:
+```
+
+주요 기능:
+- Google Custom Search API 사용
+- 검색 결과에서 URL 추출
+- 텔레그램 채널 링크 자동 분류
+- 페이지네이션 처리 (10개 단위)
+
+매개변수:
+- `query`: 검색할 쿼리 문자열
+- `num_results`: 가져올 검색 결과 수 (기본값: 10)
+
+반환값:
+- `dict`: 일반 URL 목록과 텔레그램 채널 목록을 포함하는 딕셔너리
+
+#### 13.2.2 통합 검색
+```python
+def search_links(queries: list[str], max_results: int) -> dict:
+```
+
+주요 기능:
+- 여러 검색어에 대한 통합 검색
+- 결과 중복 제거
+- 로깅 및 진행 상황 추적
+
+매개변수:
+- `queries`: 검색할 쿼리 문자열 목록
+- `max_results`: 각 쿼리당 최대 검색 결과 수
+
+반환값:
+```python
+{
+    'google': list[str],     # 일반 URL 목록
+    'telegrams': list[str]   # 텔레그램 채널 목록
+}
+```
+
+### 13.3 SerpAPI 모듈 (serpapi.py)
+
+#### 13.3.1 단일 검색
+```python
+def serp(q: str, max_result: int = 10) -> tuple[list[dict[str, str]], list[str]]:
+```
+
+주요 기능:
+- SerpAPI를 통한 Google 검색
+- 한국어/한국 지역 기반 검색
+- 성인 콘텐츠 필터링 해제
+- 자동 교정 검색 제외
+
+매개변수:
+- `q`: 검색어 쿼리 문자열
+- `max_result`: 최대 검색 결과 수
+
+반환값:
+```python
+(
+    [                           # 일반 웹 검색 결과
+        {
+            "title": str,       # 페이지 제목
+            "link": str,        # URL
+            "source": str       # 도메인 이름
+        },
+        ...
+    ],
+    [str, ...]                 # 텔레그램 채널 이름 목록
+)
+```
+
+#### 13.3.2 다중 검색
+```python
+def search_links_by_serpapi(queries: list[str], max_results: int = 10) -> dict:
+```
+
+주요 기능:
+- 여러 검색어에 대한 병렬 검색
+- 결과 인터리빙 및 중복 제거
+- 상세한 로깅
+
+매개변수:
+- `queries`: 검색어 문자열 목록
+- `max_results`: 각 쿼리당 최대 검색 결과 수
+
+반환값:
+```python
+{
+    'google': [               # 일반 웹 검색 결과
+        {
+            "title": str,     # 페이지 제목
+            "link": str,      # URL
+            "source": str     # 도메인 이름
+        },
+        ...
+    ],
+    'telegrams': [str, ...]  # 텔레그램 채널 이름 목록
+}
+```
+
+### 13.4 유틸리티 함수
+
+#### 13.4.1 HTML 추출
+```python
+def get_html_from_url(url: str) -> str:
+```
+
+주요 기능:
+- URL에서 HTML 내용 가져오기
+- 사용자 에이전트 헤더 사용
+- 오류 처리 및 로깅
+
+매개변수:
+- `url`: HTML을 가져올 URL
+
+반환값:
+- `str`: HTML 내용 (실패 시 빈 문자열)
+
+#### 13.4.2 HTML 저장
+```python
+def save_html(html: str, folder_path: str, file_name: str) -> None:
+```
+
+주요 기능:
+- HTML 내용을 파일로 저장
+- 저장 폴더 자동 생성
+- 파일 경로 로깅
+
+매개변수:
+- `html`: 저장할 HTML 내용
+- `folder_path`: 저장할 폴더 경로
+- `file_name`: 저장할 파일 이름
