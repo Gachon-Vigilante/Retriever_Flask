@@ -1,19 +1,19 @@
 from flask import Blueprint, jsonify, Response
 from .channel import calculate_and_store_channel_similarity
 from .channel_come_in import calculate_similarity_for_new_channels
-from .newpost_similarity import new_post_insert
-from .post_similarity import post_similarity
-from .post import handle_new_posts, maybe_recluster, perform_clustering_with_HDBSCAN
+from .post_similarity import embeddings, similarity
+from .post import perform_clustering_with_HDBSCAN
 
 # Blueprint 설정
 cluster_bp = Blueprint('cluster', __name__, url_prefix='/cluster')
 
 # '/post_similarity.py' 엔드포인트
-@cluster_bp.route('/post_similarity', methods=['POST'])
-def post_similarity_calculation():
+@cluster_bp.route('/post_preprocess', methods=['POST'])
+def post_preprocess():
     try:
-        result = post_similarity()
-        return jsonify(result), 200
+        emb_result = embeddings()
+        sim_result = similarity()
+        return jsonify(emb_result,sim_result), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -30,16 +30,6 @@ def update_new_channel():
     return jsonify(result), 200
 
 # '/post.py' 엔드포인트
-@cluster_bp.route('/post_update', methods=['POST'])
-def new_post():
-    result1 = new_post_insert()
-    result2 = handle_new_posts()
-    return jsonify(result1,result2), 200
-
-@cluster_bp.route('/post_recluster', methods=['POST'])
-def recluster_api():
-    result = maybe_recluster(threshold_count=100)
-    return jsonify(result), 200
 
 @cluster_bp.route('/post_cluster', methods=['POST'])
 def post_clustering():
