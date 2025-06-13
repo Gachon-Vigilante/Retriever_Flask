@@ -19,7 +19,7 @@ def post_preprocess():
 
 # '/post_similarity.py' 엔드포인트
 @cluster_bp.route('/post_similarity', methods=['POST'])
-def post_preprocess():
+def post_similarity():
     try:
         sim_result = similarity()
 
