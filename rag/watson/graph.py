@@ -18,7 +18,14 @@ if typing.TYPE_CHECKING:
 load_dotenv()
 
 class LangGraphMethods:
+    """LangGraph 기반 워크플로우 및 질의 실행 메서드를 제공하는 클래스입니다."""
+
     def build_graph(self: 'Watson') -> Optional[CompiledStateGraph]:
+        """LangGraph 워크플로우를 빌드합니다.
+
+        Returns:
+            Optional[CompiledStateGraph]: 빌드된 그래프 객체. chats가 없으면 None 반환
+        """
         if not self.chats:
             return None
 
@@ -51,11 +58,20 @@ class LangGraphMethods:
         )
 
     def _update_graph(self: 'Watson'):
+        """그래프를 새로 빌드하여 self.graph에 할당합니다."""
         self.graph = self.build_graph()
 
     # 체인 실행(Run Chain)
     # 문서에 대한 질의를 입력하고, 답변을 출력한다.
     def ask(self: 'Watson', question: str):
+        """질문을 입력받아 LangGraph를 통해 답변을 생성합니다.
+
+        Args:
+            question (str): 사용자 질문
+
+        Returns:
+            str: 생성된 답변 또는 오류 메시지
+        """
         # chain이 있으면 chain을 실행하고 답변을 반환. chain이 없으면 에러 메세지 반환.
         inputs = {
             "messages": [

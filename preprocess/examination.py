@@ -20,6 +20,14 @@ headers = {
 }
 
 def get_html_from_url(url: str) -> str:
+    """URL에서 HTML 내용을 가져옵니다.
+
+    Args:
+        url: HTML을 가져올 URL
+
+    Returns:
+        str: HTML 내용. 요청 실패 시 빈 문자열 반환
+    """
     try:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
@@ -30,6 +38,18 @@ def get_html_from_url(url: str) -> str:
         return ""
         
 def process_ai_extraction(idx, html, max_retries=3):
+    """AI를 사용하여 HTML에서 홍보 내용을 추출합니다.
+
+    Args:
+        idx: 처리 중인 인덱스
+        html: HTML 문서 문자열
+        max_retries: 최대 재시도 횟수 (기본값: 3)
+
+    Returns:
+        tuple: (인덱스, 추출된 내용, 분류 결과)
+            - 추출된 내용: "NONE" 또는 추출된 텍스트 또는 "ERROR"
+            - 분류 결과: "P" (홍보) 또는 "NP" (비홍보) 또는 "ERROR"
+    """
     for attempt in range(max_retries):
         try:
             print(f"[DEBUG] AI 추출 시도 {attempt + 1}회: 인덱스 {idx}")
@@ -51,12 +71,23 @@ def process_ai_extraction(idx, html, max_retries=3):
 
 
 def clean_text(text):
+    """텍스트에서 제어 문자를 제거합니다.
+
+    Args:
+        text: 정제할 텍스트
+
+    Returns:
+        str: 정제된 텍스트
+    """
     if pd.isna(text):
         return ""
     return re.sub(r"[\x00-\x1f]", "", str(text))
 
 class PromotionLabelerApp(QMainWindow):
+    """마약 홍보글 검사 도구의 GUI 애플리케이션 클래스입니다."""
+
     def __init__(self):
+        """GUI 애플리케이션을 초기화합니다."""
         super().__init__()
         self.setWindowTitle("마약 홍보글 검사 도구")
         self.setGeometry(100, 100, 400, 200)
@@ -74,12 +105,18 @@ class PromotionLabelerApp(QMainWindow):
         self.setCentralWidget(container)
 
     def select_and_label_file(self):
+        """파일 선택 대화상자를 열고 선택된 파일을 검사합니다."""
         file_path, _ = QFileDialog.getOpenFileName(self, "엑셀 파일 선택", "", "Excel Files (*.xlsx)")
         if file_path:
             self.label.setText(f"선택된 파일: {file_path}")
             self.label_file(file_path)
 
     def label_file(self, file_path):
+        """선택된 엑셀 파일의 URL들을 검사하고 결과를 저장합니다.
+
+        Args:
+            file_path: 검사할 엑셀 파일 경로
+        """
         try:
             df = pd.read_excel(file_path)
             df = df.reset_index(drop=True)

@@ -1,3 +1,4 @@
+"""텔레그램 채널에서 가격 정보를 추출하고 갱신하는 유틸리티 모듈."""
 from typing import Union
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -11,6 +12,16 @@ from ai.datamodel import Catalog
 
 
 def get_catalog(channel_id: int) -> dict[str, Union[list[int], str]]:
+    """특정 텔레그램 채널에서 가격 정보를 추출합니다.
+
+    Args:
+        channel_id (int): 가격 정보를 추출할 텔레그램 채널 ID
+
+    Returns:
+        dict: 추출된 가격 정보와 관련 채팅 ID 목록
+            - chatIds: 가격 정보가 포함된 채팅 ID 리스트
+            - description: 가격 정보 요약 문자열
+    """
     logger.info(f"텔레그램 채널에서 가격 정보 검색 시작. Channel ID: {channel_id}")
     channel_data = Database.Collection.Channel.DATA
 
@@ -94,6 +105,11 @@ def get_catalog(channel_id: int) -> dict[str, Union[list[int], str]]:
     }
 
 def update_catalog(channel_id: int) -> None:
+    """특정 채널의 가격 정보를 DB에 갱신합니다.
+
+    Args:
+        channel_id (int): 가격 정보를 갱신할 텔레그램 채널 ID
+    """
     Database.Collection.Channel.INFO.update_one(
         {"_id": channel_id},
         {"$set": {"catalog": get_catalog(channel_id)}}

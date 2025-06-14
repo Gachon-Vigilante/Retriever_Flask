@@ -3,6 +3,14 @@ from flask import jsonify
 from itertools import zip_longest
 
 def merge_lists_remove_duplicates(lists):
+    """여러 리스트를 병합하고 중복을 제거합니다.
+
+    Args:
+        lists: 병합할 리스트들의 시퀀스
+
+    Returns:
+        list: 중복이 제거된 병합된 리스트
+    """
     seen = set()  # 중복 체크용
     result = []
 
@@ -76,6 +84,15 @@ def merge_parallel_unique(all_urls: dict[str, list[str]]) -> list[str]:
 from typing import get_origin, get_args, Any, Union, Literal
 
 def is_valid_type(value, expected_type):
+    """값이 주어진 타입과 호환되는지 검사합니다.
+
+    Args:
+        value: 검사할 값
+        expected_type: 기대하는 타입 (Union, Literal, list, dict, tuple 등 지원)
+
+    Returns:
+        bool: 값이 기대하는 타입과 호환되면 True, 아니면 False
+    """
     origin = get_origin(expected_type)
     args = get_args(expected_type)
 
@@ -116,6 +133,15 @@ def is_valid_type(value, expected_type):
     return False
 
 def confirm_request(data: dict, required: dict[str, Any]):
+    """요청 데이터가 필수 필드를 포함하고 타입이 올바른지 확인합니다.
+
+    Args:
+        data: 검사할 요청 데이터
+        required: 필수 필드와 그 타입을 정의한 딕셔너리
+
+    Returns:
+        tuple: (에러 응답, 상태 코드) 또는 None (검증 성공 시)
+    """
     if not data:
         return jsonify({"error": "Please provide JSON request body."}), 400
 
@@ -133,7 +159,14 @@ def confirm_request(data: dict, required: dict[str, Any]):
 import uuid
 import typing
 def generate_integer_id64(existing_ids:typing.Iterable[int]=None):
-    """64비트 무작위 정수 ID를 생성해서 반환하는 함수."""
+    """64비트 무작위 정수 ID를 생성합니다.
+
+    Args:
+        existing_ids: 이미 존재하는 ID들의 컬렉션 (선택사항)
+
+    Returns:
+        int: 생성된 64비트 무작위 정수 ID
+    """
     # uuid4()를 사용하여 무작위 UUID 생성 후, 정수형으로 변환
     if not existing_ids:
         return uuid.uuid4().int % (1 << 63)
@@ -146,7 +179,15 @@ def compare_dicts_sorted(
         dict1: dict[str, list[int]],
         dict2: dict[str, list[int]]
 ) -> bool:
-    """두 개의 딕셔너리를 비교해서 원소가 완벽히 동일하면 참을, 그렇지 않으면 거짓을 반환하는 함수."""
+    """두 딕셔너리의 내용이 완전히 동일한지 비교합니다.
+
+    Args:
+        dict1: 비교할 첫 번째 딕셔너리
+        dict2: 비교할 두 번째 딕셔너리
+
+    Returns:
+        bool: 두 딕셔너리의 내용이 완전히 동일하면 True, 아니면 False
+    """
     # 두 딕셔너리의 키 집합이 동일한지 확인
     if set(dict1.keys()) != set(dict2.keys()):
         return False
@@ -161,9 +202,13 @@ def compare_dicts_sorted(
 from datetime import datetime, timezone
 
 def dict_to_xml(data: dict) -> str:
-    """
-    Convert a dictionary to XML string, wrapping each key/value in a tag.
-    Datetime objects are formatted as UTC ISO strings.
+    """딕셔너리를 XML 문자열로 변환합니다.
+
+    Args:
+        data: 변환할 딕셔너리
+
+    Returns:
+        str: XML 형식의 문자열
     """
     xml_parts = []
     for key, value in data.items():
@@ -178,7 +223,18 @@ def dict_to_xml(data: dict) -> str:
 import requests
 
 def request_api(**request_kwargs):
-    """간단한 API 요청 함수."""
+    """API 요청을 수행합니다.
+
+    Args:
+        **request_kwargs: API 요청에 필요한 키워드 인자들
+            - method: HTTP 메서드 ("GET" 또는 "POST")
+            - url: 요청할 URL
+            - params: GET 요청의 쿼리 파라미터
+            - data: POST 요청의 데이터
+
+    Returns:
+        requests.Response: API 응답 객체
+    """
     if request_kwargs.get('method') == "GET":
         return requests.get(request_kwargs.get('url'), params=request_kwargs['params'], timeout=request_kwargs.get("timeout") or 30)
     elif request_kwargs.get('method') == "POST":
@@ -204,4 +260,12 @@ class ApiResponse:
         return string
 
 def api_test(**request_kwargs):
+    """API 요청을 테스트하고 응답을 포맷팅합니다.
+
+    Args:
+        **request_kwargs: API 요청에 필요한 키워드 인자들
+
+    Returns:
+        ApiResponse: 포맷팅된 API 응답 객체
+    """
     return ApiResponse(request_api(**request_kwargs))

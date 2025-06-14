@@ -19,12 +19,29 @@ from .weaviate import WeaviateClientContext
 MODEL_NAME = get_model_name(LLMs.GPT4o)
 
 def update_state(state: GraphState, node_name: str, **updates) -> GraphState:
-    """Graph의 State를 입력받고, 입력받은 State에서 **updates로 받은 딕셔너리를 반영해서 수정된 State를 반환하는 함수."""
+    """Graph의 State를 입력받고, 입력받은 State에서 **updates로 받은 딕셔너리를 반영해서 수정된 State를 반환하는 함수.
+
+    Args:
+        state (GraphState): 기존 상태 객체
+        node_name (str): 노드 이름
+        **updates: 추가로 반영할 상태 값들
+
+    Returns:
+        GraphState: 업데이트된 상태 객체
+    """
     new_state: GraphState = state.copy()
     new_state.update(**updates)
     return new_state
 
 def parse_filter_node(node: dict):
+    """Weaviate 필터 노드를 재귀적으로 파싱하여 Filter 객체로 변환합니다.
+
+    Args:
+        node (dict): 필터 조건 노드
+
+    Returns:
+        Filter: 변환된 Weaviate Filter 객체
+    """
     if "and" in node:
         return Filter.all_of([parse_filter_node(sub) for sub in node["and"]])
     if "or" in node:
@@ -75,9 +92,18 @@ def parse_sort_list(sort_json: list[dict]):
     return sort_obj
 
 class LangGraphNodes:
+    """LangGraph 기반 RAG 워크플로우의 각 노드(질문, 분류, 검색, 생성 등)를 정의하는 클래스입니다."""
     # Root Nodes
     @staticmethod
     def ask_question(state: GraphState) -> GraphState:
+        """질문 노드: 사용자의 질문을 State에 저장합니다.
+
+        Args:
+            state (GraphState): 현재 상태
+
+        Returns:
+            GraphState: 질문이 반영된 새로운 상태
+        """
         if state.get("debug"):
             print("\n=== NODE: question ===\n")
         question = state["messages"][-1].content
@@ -126,6 +152,16 @@ class LangGraphNodes:
 
     @staticmethod
     def execute_search(state: GraphState, channel_ids: list[int], index_name=weaviate_index_name) -> GraphState:
+        """Weaviate에서 텔레그램 메시지를 검색하고, 결과를 state에 반영합니다.
+
+        Args:
+            state (GraphState): 현재 상태
+            channel_ids (list[int]): 검색할 채널 ID 목록
+            index_name (str): Weaviate 인덱스명
+
+        Returns:
+            GraphState: 검색 결과가 반영된 새로운 상태
+        """
         if state.get("debug"):
             print("\n=== NODE: execute_search ===\n")
 
@@ -294,6 +330,14 @@ class LangGraphNodes:
 
     @staticmethod
     def handle_error(state: GraphState) -> GraphState:
+        """에러 발생 시 상태를 업데이트하는 노드입니다.
+
+        Args:
+            state (GraphState): 현재 상태
+
+        Returns:
+            GraphState: 에러 노드가 반영된 상태
+        """
         if state.get("debug"):
             print("\n=== NODE: handle error ===\n")
         return update_state(state, node_name="handle_error")
@@ -301,6 +345,15 @@ class LangGraphNodes:
     # 모든 것이 검증된 후 context를 기반으로 답변을 생성하는 Graph Branch
     @staticmethod
     def generate(state: GraphState, channel_info: dict) -> GraphState:
+        """최종 답변을 생성하는 노드입니다.
+
+        Args:
+            state (GraphState): 현재 상태
+            channel_info (dict): 채널 정보
+
+        Returns:
+            GraphState: 답변 메시지가 추가된 상태
+        """
         if state.get("debug"):
             print("\n=== NODE: generate ===\n")
 
