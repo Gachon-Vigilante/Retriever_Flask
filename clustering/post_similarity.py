@@ -6,6 +6,7 @@ from collections import Counter
 from pymongo import UpdateOne
 from server.db import Database
 from server.cypher import run_cypher, Neo4j # 네오4j 쿼리 실행 함수
+from server.logger import logger
 
 
 # MongoDB 컬렉션
@@ -49,7 +50,7 @@ def fetch_documents():
     })
 
     return [{
-        "_id": str(doc["_id"]),
+        "_id": doc["_id"],
         "link": doc.get("link", ""),
         "siteName": doc.get("siteName", ""),
         "content": doc.get("content", ""),
@@ -66,6 +67,9 @@ def embeddings():
     if not documents:
         return {"message": "No documents found or embeddings already exist."}
 
+    logger.info(f"새로운 게시글 {len(documents)}개에 대한 텍스트 임베딩 시작.")
+
+    # promoSiteLink 추출
     promo_links = [
         str(doc.get("promoSiteLink", [])[0])
         for doc in documents
@@ -88,6 +92,8 @@ def embeddings():
             {"$set": {"embedding": combined_emb.tolist(), "updatedAt": doc["updatedAt"]}}
         ))
 
+    logger.debug(f"bulk_ops length: {len(bulk_ops)}")
+
     if bulk_ops:
         collection.bulk_write(bulk_ops)
 
@@ -102,6 +108,8 @@ def similarity(threshold=0.7):
 
     if len(documents) < 2:
         return {"message": "Not enough documents with embeddings to calculate similarity."}
+
+    logger.info(f"게시글 {len(documents)}개에 대한 텍스트 유사도 계산 시작.")
 
     embeddings = np.array([doc["embedding"] for doc in documents])
     similarity_matrix = cosine_similarity(embeddings)
@@ -122,7 +130,7 @@ def similarity(threshold=0.7):
             if score >= threshold and doc["link"] < other_doc["link"]:
                 run_cypher(Neo4j.QueryTemplate.Node.Post.MERGE, {
                     "link": doc["link"],
-                    "siteName": doc.get("siteName"),
+                    "siteName": doc.get("source") or doc.get("siteName"),
                     "content": doc.get("content"),
                     "createdAt": doc.get("createdAt"),
                     "updatedAt": doc.get("updatedAt"),
@@ -130,7 +138,7 @@ def similarity(threshold=0.7):
                 })
                 run_cypher(Neo4j.QueryTemplate.Node.Post.MERGE, {
                     "link": other_doc["link"],
-                    "siteName": other_doc.get("siteName"),
+                    "siteName": other_doc.get("source") or other_doc.get("siteName"),
                     "content": other_doc.get("content"),
                     "createdAt": other_doc.get("createdAt"),
                     "updatedAt": other_doc.get("updatedAt"),

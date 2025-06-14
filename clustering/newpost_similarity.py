@@ -29,6 +29,8 @@ def fetch_documents(filter=None, with_embedding=False):
     proj = {
         "_id": 1,
         "link": 1,
+        "source": 1,
+        "title": 1,
         "siteName": 1,
         "content": 1,
         "promoSiteLink": 1,  # ← 추가
@@ -49,6 +51,8 @@ def fetch_documents(filter=None, with_embedding=False):
         docs.append({
             "postId": str(doc["_id"]),
             "link": doc.get("link", ""),
+            "source": doc.get("source", ""),
+            "title": doc.get("title", ""),
             "siteName": doc.get("siteName", ""),
             "content": content,
             "promoSiteLink": doc.get("promoSiteLink", []),  # ← 추가

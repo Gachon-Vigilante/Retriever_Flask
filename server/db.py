@@ -11,7 +11,12 @@ load_dotenv()
 def get_mongo_connection_string() -> str:
     return os.getenv("MONGO_CONNECTION_STRING")
 
-mongo_client = pymongo.MongoClient(get_mongo_connection_string()) # MongoDB 클라이언트 생성
+mongo_client = pymongo.MongoClient(
+    get_mongo_connection_string(),
+    serverSelectionTimeoutMS=10000,  # 서버 응답 대기 시간 (ms)
+    retryWrites=True,
+    retryReads=True
+) # MongoDB 클라이언트 생성
 
 db_name = os.getenv('MONGO_DB_NAME')
 db_object: Database = mongo_client[db_name]
