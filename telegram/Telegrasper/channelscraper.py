@@ -1,3 +1,4 @@
+"""텔레그램 채널 콘텐츠 스크래핑 및 처리 기능을 제공하는 모듈."""
 import asyncio
 import os
 import typing
@@ -15,8 +16,16 @@ if typing.TYPE_CHECKING:
     from .manager import TelegramManager
 
 class ChannelContentMethods:
+    """텔레그램 채널의 콘텐츠를 검사하고 수집하는 메서드를 제공하는 클래스입니다."""
+    
     async def check_channel_content(self:'TelegramManager', channel) -> bool:
-        """채널의 데이터를 일부 수집해서, 마약 관련 채널로 강력히 의심되는지 확인하는 검문 메서드."""
+        """채널의 데이터를 일부 수집해서, 마약 관련 채널로 강력히 의심되는지 확인하는 검문 메서드.
+
+        Args:
+            channel: 채널 엔티티 객체 또는 채널 ID/username/초대 링크
+        Returns:
+            bool: 마약 관련 채널로 의심되는지 여부
+        """
         try:
             if isinstance(channel, (int, str)): # channel key의 형태로 입력되었을 경우, 채널에 연결하고 entity 반환 필요
                 entity = await self.connect_channel(channel)
@@ -45,9 +54,14 @@ class ChannelContentMethods:
             logger.debug(f"텔레그램 채널 검문 결과: False, 사유: 오류 발생")
             return False
 
-
-    # 채널 내의 데이터를 스크랩하는 함수
     async def scrape_channel_content(self:'TelegramManager', channel_key:typing.Union[int, str]) -> dict:
+        """채널의 모든 메시지를 수집하고 저장하는 비동기 메서드.
+
+        Args:
+            channel_key (int|str): 채널 ID, @username, 또는 초대 링크
+        Returns:
+            dict: 수집 결과 상태와 메시지를 포함하는 딕셔너리
+        """
         try:
             entity = await self.connect_channel(channel_key)
             if entity is None:
@@ -82,19 +96,36 @@ class ChannelContentMethods:
             return {"status": "success",
                     "message": msg}
 
-
-    # 채널 데이터 수집을 동기적으로 실행하는 동기 래퍼(wrapper) 함수
     def scrape(self:'TelegramManager', channel_key: typing.Union[int, str]) -> dict:
+        """채널 데이터 수집을 동기적으로 실행하는 래퍼 메서드.
+
+        Args:
+            channel_key (int|str): 채널 ID, @username, 또는 초대 링크
+        Returns:
+            dict: 수집 결과 상태와 메시지를 포함하는 딕셔너리
+        """
         future = asyncio.run_coroutine_threadsafe(self.scrape_channel_content(channel_key), self.loop)
         return future.result()  # 블로킹 호출 (결과를 기다림)
 
-    # 채널 데이터 의심도 검증을 동기적으로 실행하는 동기 래퍼(wrapper) 함수
     def check(self:'TelegramManager', channel_key: typing.Union[int, str]) -> bool:
+        """채널 데이터 의심도 검증을 동기적으로 실행하는 래퍼 메서드.
+
+        Args:
+            channel_key (int|str): 채널 ID, @username, 또는 초대 링크
+        Returns:
+            bool: 마약 관련 채널로 의심되는지 여부
+        """
         future = asyncio.run_coroutine_threadsafe(self.check_channel_content(channel_key), self.loop)
         return future.result()  # 블로킹 호출 (결과를 기다림)
 
-
 async def process_message(entity, client, message) -> None:
+    """텔레그램 메시지를 처리하고 저장하는 비동기 함수.
+
+    Args:
+        entity: 텔레그램 채널 엔티티
+        client: 텔레그램 클라이언트
+        message: 처리할 메시지 객체
+    """
     chat_collection = Database.Collection.Channel.DATA  # 채팅 컬렉션 선택
     channel_collection = Database.Collection.Channel.INFO
     argot_collection = Database.Collection.ARGOT # 은어 컬렉션 선택

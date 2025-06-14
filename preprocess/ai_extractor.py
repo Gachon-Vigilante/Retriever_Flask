@@ -11,10 +11,16 @@ MODEL_NAME = get_model_name(LLMs.GPT4o)
 
 # 글의 내용 분석 결과를 저장하는 데이터 모델 정의
 class Analysis(BaseModel):
-    """A binary score for relevance checks"""
+    """마약 홍보글 분석 결과를 저장하는 데이터 모델입니다.
+
+    Attributes:
+        binary_classification: 마약 홍보 여부 (True/False)
+        promotion_content: 홍보 내용 (홍보가 아닌 경우 빈 문자열)
+        telegram_keys: 발견된 텔레그램 주소 목록
+    """
     binary_classification: bool = Field(
         description="Return True if the given HTML content clearly promotes drug sales. If it does not, return False."
-                    "If it is just news articles, police reports, or discussions that merely **report** on drug-related incidents without advertising or facilitating drug sales or the content appears to be a news report (e.g., contains terms like “arrested”, “report”, “crackdown”, “police investigation”, “journalist”, etc.) or describes third-party actions without promoting sales, classify it as `False`."
+                    "If it is just news articles, police reports, or discussions that merely **report** on drug-related incidents without advertising or facilitating drug sales or the content appears to be a news report (e.g., contains terms like "arrested", "report", "crackdown", "police investigation", "journalist", etc.) or describes third-party actions without promoting sales, classify it as `False`."
     )
     promotion_content: str = Field(
         description="If the given HTML promotes drug sales, return the promotional content as promotion_content. If not, return an empty string. Do not translate the promotional content; extract and return it exactly as it appears in the original input. (e.g. if the original input was Korean, return it in Korean.)"
@@ -24,8 +30,17 @@ class Analysis(BaseModel):
     )
 
 def extract_promotion_by_openai(html: str) -> dict[str, str]:
-    """OpenAI 의 API를 사용해 마약 홍보 정보를 추출하는 API.
-    gpt-4o 모델을 사용해서, 마약 홍보글인지 여부와 만약 그렇다면 발견되는 텔레그램 주소를 반환한다."""
+    """OpenAI API를 사용하여 HTML에서 마약 홍보 정보를 추출합니다.
+
+    Args:
+        html: 분석할 HTML 문서 문자열
+
+    Returns:
+        dict: 분석 결과를 포함하는 딕셔너리
+            - classification_result: 마약 홍보 여부 (True/False)
+            - promotion_content: 홍보 내용 (홍보가 아닌 경우 빈 문자열)
+            - telegrams: 발견된 텔레그램 주소 목록
+    """
     logger.debug(f"HTML 텍스트에서 마약 홍보 관련 내용 추출 시작. 텍스트 길이: {len(html)}")
     # 전체 HTMl 텍스트를 블록으로 분할
     text_blocks = extract_text_blocks_from_html(html)
@@ -51,7 +66,7 @@ You are given blocks of text extracted from web pages. These may include user-ge
 
 ### REMEMBER:
 Classify as `False` for news articles, police reports, or discussions that merely **report** on drug-related incidents without advertising or facilitating drug sales. 
-If the content appears to be a news report (e.g., contains terms like “arrested”, “report”, “crackdown”, “police investigation”, “journalist”, etc.) or describes third-party actions without promoting sales, classify it as `False`.
+If the content appears to be a news report (e.g., contains terms like "arrested", "report", "crackdown", "police investigation", "journalist", etc.) or describes third-party actions without promoting sales, classify it as `False`.
 
 The following argot terms are commonly used to refer to illegal drugs and may indicate promotional content when found in a commercial context (e.g., with words like "팝니다", "삽니다", "판매", "구매", "샘플", etc.):
 

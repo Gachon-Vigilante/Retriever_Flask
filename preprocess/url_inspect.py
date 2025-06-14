@@ -9,6 +9,15 @@ from bs4 import BeautifulSoup
 from collections import Counter
 
 def shorten_html_for_ai(html: str, max_tokens=4000):
+    """HTML 문서를 AI 처리에 적합한 길이로 줄입니다.
+
+    Args:
+        html: HTML 문서 문자열
+        max_tokens: 최대 토큰 수 (기본값: 4000)
+
+    Returns:
+        str: 줄여진 텍스트
+    """
     text = BeautifulSoup(html, "html.parser").get_text(separator="\n")
     return text[:max_tokens]  # 예: 최대 4000자까지만 사용
 
@@ -39,6 +48,11 @@ driver.quit()
 '''
 '''
 def compare_and_save_labels(file_path: str) -> None:
+    """엑셀 파일의 라벨을 비교하고 결과를 저장합니다.
+
+    Args:
+        file_path: 엑셀 파일 경로
+    """
     df = pd.read_excel(file_path)
 
     # 결과 저장용 리스트

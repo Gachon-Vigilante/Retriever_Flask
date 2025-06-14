@@ -9,7 +9,10 @@ from PyQt5.QtCore import QUrl
 
 
 class DrugPromotionDetector(QMainWindow):
+    """마약 홍보글 검사 도구의 GUI 애플리케이션 클래스입니다."""
+
     def __init__(self):
+        """GUI 애플리케이션을 초기화합니다."""
         super().__init__()
         self.initUI()
         self.current_index = 0
@@ -18,6 +21,7 @@ class DrugPromotionDetector(QMainWindow):
         self.web_view = None
 
     def initUI(self):
+        """GUI 컴포넌트들을 초기화하고 배치합니다."""
         self.setWindowTitle('Drug Promotion Detector')
         self.setGeometry(100, 100, 1200, 800)
 
@@ -84,6 +88,7 @@ class DrugPromotionDetector(QMainWindow):
         open_action.triggered.connect(self.open_file)
 
     def open_file(self):
+        """엑셀 파일을 선택하고 데이터를 로드합니다."""
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx)")
         if file_path:
             self.file_path = file_path
@@ -95,6 +100,7 @@ class DrugPromotionDetector(QMainWindow):
             self.load_current_url()
 
     def find_start_index(self):
+        """처리되지 않은 URL의 인덱스를 찾습니다."""
         # 판단 안 된 URL(3번째 열이 비어있는 곳)부터 시작
         for i in range(1, len(self.df)):
             if self.df.iloc[i, self.result_col_index] == "":
@@ -103,6 +109,7 @@ class DrugPromotionDetector(QMainWindow):
         self.current_index = len(self.df)  # 모두 끝난 경우
 
     def load_current_url(self):
+        """현재 인덱스의 URL을 웹뷰에 로드합니다."""
         if self.current_index >= len(self.df):
             self.show_message("모든 URL이 처리되었습니다.")
             return
@@ -118,6 +125,11 @@ class DrugPromotionDetector(QMainWindow):
         self.comment.clear()
 
     def save_result(self, label):
+        """현재 URL의 검사 결과를 저장하고 다음 URL로 이동합니다.
+
+        Args:
+            label: 검사 결과 라벨 ("FP", "FN", "TP", "TN" 중 하나)
+        """
         self.df.iloc[self.current_index, self.result_col_index] = label
         try:
             self.df.to_excel(self.file_path, index=False)
@@ -127,15 +139,22 @@ class DrugPromotionDetector(QMainWindow):
         self.load_current_url()
 
     def prev_url(self):
+        """이전 URL로 이동합니다."""
         if self.current_index > 1:
             self.current_index -= 1
             self.load_current_url()
 
     def next_url(self):
+        """다음 URL로 이동합니다."""
         self.current_index += 1
         self.load_current_url()
 
     def show_message(self, message):
+        """메시지 박스를 표시합니다.
+
+        Args:
+            message: 표시할 메시지
+        """
         QMessageBox.information(self, "알림", message)
 
 

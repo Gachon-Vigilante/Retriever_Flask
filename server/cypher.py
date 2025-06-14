@@ -12,11 +12,14 @@ neo4j_driver = GraphDatabase.driver(uri, auth=(username, password))  # neo4j+s�
 
 
 def run_cypher(query, parameters: Dict[str, Any] = None) -> Result:
-    """
-    주어진 Cypher 쿼리와 파라미터를 실행하고 결과를 리스트로 반환한다.
-    :param query: 실행할 Cypher 쿼리 문자열
-    :param parameters: 쿼리에 사용할 파라미터 (옵션)
-    :return: 결과를 딕셔너리 리스트로 반환
+    """Neo4j 데이터베이스에서 Cypher 쿼리를 실행합니다.
+
+    Args:
+        query: 실행할 Cypher 쿼리 문자열
+        parameters: 쿼리에 사용할 파라미터 (기본값: None)
+
+    Returns:
+        Result: Neo4j 쿼리 실행 결과
     """
     parameters = parameters or {}
 

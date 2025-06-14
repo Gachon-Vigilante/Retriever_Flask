@@ -18,8 +18,17 @@ if typing.TYPE_CHECKING:
     from rag.watson import Watson
 
 class VectorStoreMethods:
+    """Weaviate 벡터스토어 연동 및 동기화 관련 메서드를 제공하는 클래스입니다."""
     @staticmethod
     def get_vectorstore(weaviate_client:Optional[WeaviateClient]=None):
+        """Weaviate 벡터스토어 인스턴스를 반환합니다.
+
+        Args:
+            weaviate_client (Optional[WeaviateClient]): 외부에서 전달받은 클라이언트 (없으면 새로 연결)
+
+        Returns:
+            WeaviateVectorStore: 벡터스토어 인스턴스
+        """
         # 먼저 스키마 등록
         with WeaviateClientContext() as client:
             VectorStoreMethods.register_schema(client)
@@ -32,6 +41,11 @@ class VectorStoreMethods:
 
     @staticmethod
     def register_schema(weaviate_client: WeaviateClient) -> None:
+        """Weaviate에 TelegramMessages 스키마를 등록합니다.
+
+        Args:
+            weaviate_client (WeaviateClient): Weaviate 클라이언트
+        """
         # 먼저 클래스가 존재하는지 확인
         if weaviate_index_name in weaviate_client.collections.list_all().keys():
             logger.info("TelegramMessages already exists in Weaviate.")
@@ -61,6 +75,11 @@ class VectorStoreMethods:
         logger.info("TelegramMessages schema is created in Weaviate.")
 
     def update_vectorstore(self: 'Watson'):
+        """MongoDB와 Weaviate 벡터스토어를 동기화합니다.
+
+        Returns:
+            None
+        """
         with WeaviateClientContext() as weaviate_client:
             weaviate_client.connect()
             ##### 1. Weaviate에서 channelId 필터로 모든 _id 가져오기 #####
@@ -142,6 +161,14 @@ class VectorStoreMethods:
 
     @staticmethod
     def build_loader(ids: list[ObjectId]) -> MongodbLoader:
+        """MongoDB에서 지정된 ID의 채팅 데이터를 로드하는 커스텀 로더를 반환합니다.
+
+        Args:
+            ids (list[ObjectId]): 로드할 채팅의 ObjectId 목록
+
+        Returns:
+            MappedMongodbLoader: 커스텀 MongoDB 로더
+        """
         return MappedMongodbLoader(
             connection_string=get_mongo_connection_string(),
             db_name=Database.NAME,
@@ -163,6 +190,7 @@ from typing import Dict, List, Optional, Sequence
 from langchain_core.documents import Document
 
 class MappedMongodbLoader(MongodbLoader):
+    """MongoDB에서 데이터를 로드할 때 메타데이터 필드명을 매핑하여 반환하는 커스텀 로더 클래스입니다."""
     def __init__(
             self,
             connection_string: str,
@@ -175,6 +203,18 @@ class MappedMongodbLoader(MongodbLoader):
             metadata_mapping: Optional[Dict[str, str]] = None,
             include_db_collection_in_metadata: bool = True,
     ) -> None:
+        """커스텀 MongoDB 로더를 초기화합니다.
+
+        Args:
+            connection_string (str): MongoDB 연결 문자열
+            db_name (str): 데이터베이스 이름
+            collection_name (str): 컬렉션 이름
+            filter_criteria (Optional[Dict]): 필터 조건
+            field_names (Optional[Sequence[str]]): 로드할 필드명
+            metadata_names (Optional[Sequence[str]]): 메타데이터 필드명
+            metadata_mapping (Optional[Dict[str, str]]): 메타데이터 키 매핑
+            include_db_collection_in_metadata (bool): DB/컬렉션 메타데이터 포함 여부
+        """
         self.metadata_mapping = metadata_mapping or {}
 
         super().__init__(
@@ -188,7 +228,11 @@ class MappedMongodbLoader(MongodbLoader):
         )
 
     async def aload(self) -> List[Document]:
-        """Asynchronously loads data into Document objects with renamed metadata."""
+        """비동기적으로 데이터를 Document 객체로 로드합니다. (메타데이터 필드명 매핑 적용)
+
+        Returns:
+            List[Document]: 로드된 Document 객체 리스트
+        """
         result = []
         total_docs = await self.collection.count_documents(self.filter_criteria)
         projection = self._construct_projection()

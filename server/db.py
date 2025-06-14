@@ -9,9 +9,19 @@ from pymongo.synchronous.database import Database
 load_dotenv()
 
 def get_mongo_connection_string() -> str:
+    """MongoDB 연결 문자열을 환경 변수에서 가져옵니다.
+
+    Returns:
+        str: MongoDB 연결 문자열
+    """
     return os.getenv("MONGO_CONNECTION_STRING")
 
-mongo_client = pymongo.MongoClient(get_mongo_connection_string()) # MongoDB 클라이언트 생성
+mongo_client = pymongo.MongoClient(
+    get_mongo_connection_string(),
+    serverSelectionTimeoutMS=10000,  # 서버 응답 대기 시간 (ms)
+    retryWrites=True,
+    retryReads=True
+) # MongoDB 클라이언트 생성
 
 db_name = os.getenv('MONGO_DB_NAME')
 db_object: Database = mongo_client[db_name]
@@ -22,6 +32,7 @@ class Database:
             INFO: Collection = db_object["channel_info"]
             DATA: Collection = db_object["channel_data"]
             SIMILARITY: Collection = db_object["channel_similarity"]
+        CENTER: Collection = db_object["cluster_centroids"]
         DRUGS: Collection = db_object["drugs"]
         ARGOT: Collection = db_object["argot"]
         CHATBOT: Collection = db_object["chat_bot"]

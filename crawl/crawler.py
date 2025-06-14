@@ -15,6 +15,17 @@ SEARCH_ENGINE_ID = "369613352bc34466e"
 
 # 구글 검색 결과에서 URL을 가져오는 함수
 def google_search(query:str, num_results:int=10, api_key:str=API_KEY, search_engine_id:str=SEARCH_ENGINE_ID) -> dict[str:list, str:list]:
+    """Google Custom Search API를 사용하여 검색을 수행합니다.
+
+    Args:
+        query: 검색할 쿼리 문자열
+        num_results: 가져올 검색 결과 수 (기본값: 10)
+        api_key: Google Custom Search API 키 (기본값: 전역 변수 API_KEY)
+        search_engine_id: Google Custom Search 엔진 ID (기본값: 전역 변수 SEARCH_ENGINE_ID)
+
+    Returns:
+        tuple: (일반 URL 목록, 텔레그램 채널 목록)
+    """
     url = "https://www.googleapis.com/customsearch/v1"
     urls, telegrams = [], []
     params = {
@@ -29,7 +40,11 @@ def google_search(query:str, num_results:int=10, api_key:str=API_KEY, search_eng
 
     while len(urls) + len(telegrams) < num_results:
         # 검색을 수행하고 결과를 수신
-        response = requests.get(url, params=params)
+        try:
+            response = requests.get(url, params=params, timeout=10)
+        except Exception as e:
+            logger.error(e)
+            continue
         data = response.json()
 
         # 검색 결과가 없을 경우(검색 결과의 끝에 도달했을 경우) 검색 중단
@@ -58,6 +73,17 @@ def google_search(query:str, num_results:int=10, api_key:str=API_KEY, search_eng
 # 통합 웹 검색
 from utils import merge_lists_remove_duplicates
 def search_links(queries: list[str], max_results: int) -> dict:  # 만약 로컬 파일에 결과를 저장하고 싶다면 save_file을 True로 변경
+    """여러 검색어에 대해 통합 검색을 수행합니다.
+
+    Args:
+        queries: 검색할 쿼리 문자열 목록
+        max_results: 각 쿼리당 가져올 최대 검색 결과 수
+
+    Returns:
+        dict: 검색 결과를 포함하는 딕셔너리
+            - 'google': 일반 URL 목록
+            - 'telegrams': 텔레그램 채널 목록
+    """
     logger.info(f'검색어 {len(queries)}개에 대한 검색 시작...')
     # 모든 검색어에 대한 검색 수행
     all_urls, all_telegrams = {}, {}
@@ -84,8 +110,16 @@ def search_links(queries: list[str], max_results: int) -> dict:  # 만약 로컬
 
 
 def get_html_from_url(url: str) -> str:
+    """URL에서 HTML 내용을 가져옵니다.
+
+    Args:
+        url: HTML을 가져올 URL
+
+    Returns:
+        str: HTML 내용. 요청 실패 시 빈 문자열 반환
+    """
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         html_text = response.text
         return html_text
@@ -95,6 +129,13 @@ def get_html_from_url(url: str) -> str:
 
 # 각 URL의 HTML 저장 함수(현재 미사용)
 def save_html(html:str, folder_path:str, file_name:str) -> None:
+    """HTML 내용을 파일로 저장합니다.
+
+    Args:
+        html: 저장할 HTML 내용
+        folder_path: 저장할 폴더 경로
+        file_name: 저장할 파일 이름
+    """
     # 폴더가 없으면 생성
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)

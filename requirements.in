@@ -63,6 +63,9 @@ torch
 transformers
 scikit-learn
 python-louvain
+umap-learn
+sentence-transformers
+hdbscan
 
 # Tokenizing에 필요한 패키지
 sentencepiece

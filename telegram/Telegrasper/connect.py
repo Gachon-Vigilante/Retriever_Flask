@@ -1,3 +1,4 @@
+"""텔레그램 채널 초대/연결 관련 유틸리티 메서드 모듈."""
 import typing
 
 from telethon.sync import TelegramClient, types
@@ -12,10 +13,18 @@ if typing.TYPE_CHECKING:
 
 
 class ConnectMethods:
+    """텔레그램 채널 초대 수락 및 연결 기능을 제공하는 클래스입니다."""
     def __init__(self):
         super().__init__()
 
     async def accept_invitation(self:'TelegramManager', invite_link:str):
+        """텔레그램 초대 링크를 수락하고 채널 엔티티를 반환합니다.
+
+        Args:
+            invite_link (str): 텔레그램 초대 링크
+        Returns:
+            entity: 채널 엔티티 객체 또는 None
+        """
         invite_hash = invite_link.split("+")[1]
         entity = None
 
@@ -45,6 +54,13 @@ class ConnectMethods:
         return entity
 
     async def connect_channel(self:'TelegramManager', channel_key:typing.Union[int, str]):
+        """채널 ID, @username, 초대 링크 등 다양한 키로 텔레그램 채널에 연결합니다.
+
+        Args:
+            channel_key (int|str): 채널 ID, @username, 또는 초대 링크
+        Returns:
+            entity: 채널 엔티티 객체 또는 None
+        """
         logger.debug(f"Connecting to the channel... Channel key: {channel_key}")
         try:
             # 초대 링크 처리 (비공개 채널일 경우 필수 작업)
