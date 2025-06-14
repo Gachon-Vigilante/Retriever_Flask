@@ -21,7 +21,7 @@ headers = {
 
 def get_html_from_url(url: str) -> str:
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         html_text = response.text
         return html_text

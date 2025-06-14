@@ -55,23 +55,28 @@ def serp(q: str,
             if max_result < 1:
                 break
 
-            extracted_telegram_links = extractor.extract_telegram_links(item["link"])
-            # 추출된 텔레그램 링크가 있을 경우 텔레그램 항목에 추가
-            if extracted_telegram_links:
-                # Google 검색 결과이기 때문에 반환된 텔레그램 주소 목록은 1개뿐이고, 때문에 index=0만 바로 사용
-                channel_name = extracted_telegram_links[0].lower()
-                telegrams.append(channel_name)
-            else:
-                urls.append({
-                    "title": item["title"],
-                    "link": item["link"],
-                    "source": item["source"]
-                })  # 검색 결과 링크의 웹페이지 제목, 도메인 이름(soruce)을 같이 저장
-            max_result -= 1  # 검색 가능 수를 1 차감
+            if item.get("link"):
+                extracted_telegram_links = extractor.extract_telegram_links(item.get("link"))
+                # 추출된 텔레그램 링크가 있을 경우 텔레그램 항목에 추가
+                if extracted_telegram_links:
+                    # Google 검색 결과이기 때문에 반환된 텔레그램 주소 목록은 1개뿐이고, 때문에 index=0만 바로 사용
+                    channel_name = extracted_telegram_links[0].lower()
+                    telegrams.append(channel_name)
+                else:
+                    urls.append({
+                        "title": item.get("title"),
+                        "link": item.get("link"),
+                        "source": item.get("source")
+                    })  # 검색 결과 링크의 웹페이지 제목, 도메인 이름(soruce)을 같이 저장
+                max_result -= 1  # 검색 가능 수를 1 차감
 
         # 다음 페이지가 있고, 검색 가능 결과 수가 남았을 경우 다음 페이지로 다시 검색
         if (next_link := serpapi_result["serpapi_pagination"].get("next")) and max_result > 0:
-            response = requests.get(next_link, params={"api_key": api_key}) # "serpapi의 "next"에는 API KEY는 빠져 있으므로, 다시 지정해 주어야 함.
+            try:
+                response = requests.get(next_link, params={"api_key": api_key}, timeout=30) # "serpapi의 "next"에는 API KEY는 빠져 있으므로, 다시 지정해 주어야 함.
+            except Exception as e:
+                logger.error(e)
+                break
             if response.status_code == 200:
                 serpapi_result = response.json()
             else:
@@ -116,7 +121,7 @@ def search_links_by_serpapi(queries: list[str],
                                engine="google",
                                max_result=max_results,)
         all_urls[query], all_telegrams[query] = urls, telegrams
-        logger.debug(f'검색어 "{query}"에 대한 검색 결과: URL {len(urls)}개, Telegram 채널 {len(telegrams)}개')
+        logger.debug(f'검색어 "{query}"에 대한 검색 결과(최대 {max_results}개): URL {len(urls)}개, Telegram 채널 {len(telegrams)}개')
 
     all_urls: list[dict[str, str]] = merge_parallel_unique_by_link(all_urls)
     all_telegrams: list[str] = merge_parallel_unique(all_telegrams)

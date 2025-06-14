@@ -6,6 +6,7 @@ from .constants import weaviate_headers
 
 def connect_weaviate() -> WeaviateClient:
     return weaviate.connect_to_local(
+        port=8888,
         headers=weaviate_headers,
     )
 

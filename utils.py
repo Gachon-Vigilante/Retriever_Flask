@@ -180,9 +180,9 @@ import requests
 def request_api(**request_kwargs):
     """간단한 API 요청 함수."""
     if request_kwargs.get('method') == "GET":
-        return requests.get(request_kwargs.get('url'), params=request_kwargs['params'])
+        return requests.get(request_kwargs.get('url'), params=request_kwargs['params'], timeout=5)
     elif request_kwargs.get('method') == "POST":
-        return requests.post(request_kwargs.get('url'), json=request_kwargs['data'])
+        return requests.post(request_kwargs.get('url'), json=request_kwargs['data'], timeout=5)
     else:
         return requests.models.Response()
 
