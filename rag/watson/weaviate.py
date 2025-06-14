@@ -12,6 +12,7 @@ def connect_weaviate() -> WeaviateClient:
         WeaviateClient: 연결된 Weaviate 클라이언트
     """
     return weaviate.connect_to_local(
+        port=8888,
         headers=weaviate_headers,
     )
 

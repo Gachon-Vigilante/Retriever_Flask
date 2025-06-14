@@ -236,9 +236,9 @@ def request_api(**request_kwargs):
         requests.Response: API 응답 객체
     """
     if request_kwargs.get('method') == "GET":
-        return requests.get(request_kwargs.get('url'), params=request_kwargs['params'])
+        return requests.get(request_kwargs.get('url'), params=request_kwargs['params'], timeout=request_kwargs.get("timeout") or 30)
     elif request_kwargs.get('method') == "POST":
-        return requests.post(request_kwargs.get('url'), json=request_kwargs['data'])
+        return requests.post(request_kwargs.get('url'), json=request_kwargs['data'], timeout=request_kwargs.get("timeout") or 30)
     else:
         return requests.models.Response()
 

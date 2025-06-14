@@ -29,7 +29,7 @@ def get_html_from_url(url: str) -> str:
         str: HTML 내용. 요청 실패 시 빈 문자열 반환
     """
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         html_text = response.text
         return html_text

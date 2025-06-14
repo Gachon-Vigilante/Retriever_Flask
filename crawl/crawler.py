@@ -40,7 +40,11 @@ def google_search(query:str, num_results:int=10, api_key:str=API_KEY, search_eng
 
     while len(urls) + len(telegrams) < num_results:
         # 검색을 수행하고 결과를 수신
-        response = requests.get(url, params=params)
+        try:
+            response = requests.get(url, params=params, timeout=10)
+        except Exception as e:
+            logger.error(e)
+            continue
         data = response.json()
 
         # 검색 결과가 없을 경우(검색 결과의 끝에 도달했을 경우) 검색 중단
@@ -115,7 +119,7 @@ def get_html_from_url(url: str) -> str:
         str: HTML 내용. 요청 실패 시 빈 문자열 반환
     """
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         html_text = response.text
         return html_text

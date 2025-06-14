@@ -1,38 +1,31 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify, Response
 from .channel import calculate_and_store_channel_similarity
 from .channel_come_in import calculate_similarity_for_new_channels
-from .post import perform_clustering_with_cosine
-from .post_similarity import post_similarity
+from .post_similarity import embeddings, similarity
+from .post import perform_clustering_with_HDBSCAN
+
 # Blueprint 설정
 cluster_bp = Blueprint('cluster', __name__, url_prefix='/cluster')
 
-# '/post.py' 엔드포인트
-@cluster_bp.route('/post', methods=['POST'])
-def post_clustering():
-    if not request.is_json:
-        return jsonify({"error": "Request must be in JSON format"}), 400
-
-    data = request.json
-    eps = data.get('eps', 0.4)  # 기본값은 0.4
-    min_samples = data.get('min_samples', 2)
-
+# '/post_similarity.py' 엔드포인트
+@cluster_bp.route('/post_preprocess', methods=['POST'])
+def post_preprocess():
     try:
-        result = perform_clustering_with_cosine(eps, min_samples)
-        return jsonify(result), 200
+        emb_result = embeddings()
+
+        return jsonify(emb_result), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 # '/post_similarity.py' 엔드포인트
 @cluster_bp.route('/post_similarity', methods=['POST'])
-def post_similarity_calculation():
+def post_similarity():
     try:
-        result = post_similarity()
-        return jsonify(result), 200
+        sim_result = similarity()
+
+        return jsonify(sim_result), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
 # '/channel.py' 엔드포인트
 @cluster_bp.route('/channels', methods=['POST'])
 def calculate_similarity():
@@ -44,4 +37,20 @@ def calculate_similarity():
 def update_new_channel():
     result = calculate_similarity_for_new_channels()
     return jsonify(result), 200
+
+# '/post.py' 엔드포인트
+
+@cluster_bp.route('/post_cluster', methods=['POST'])
+def post_clustering():
+    try:
+        result = perform_clustering_with_HDBSCAN()
+        # 만약 결과가 Flask Response 객체면 (즉, 이미지 등 binary data)
+        if isinstance(result, Response):
+            return result
+        # 아니면 JSON 응답으로 처리
+        else:
+            return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
