@@ -67,7 +67,7 @@ def embeddings():
         return {"message": "No documents found or embeddings already exist."}
 
     promo_links = [
-        doc.get("promoSiteLink", [])[0]
+        str(doc.get("promoSiteLink", [])[0])
         for doc in documents
         if isinstance(doc.get("promoSiteLink", []), list) and doc["promoSiteLink"]
     ]
