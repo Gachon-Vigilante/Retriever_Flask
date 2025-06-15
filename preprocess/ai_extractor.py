@@ -19,8 +19,8 @@ class Analysis(BaseModel):
         telegram_keys: 발견된 텔레그램 주소 목록
     """
     binary_classification: bool = Field(
-        description="Return True if the given HTML content clearly promotes drug sales. If it does not, return False."
-                    "If it is just news articles, police reports, or discussions that merely **report** on drug-related incidents without advertising or facilitating drug sales or the content appears to be a news report (e.g., contains terms like "arrested", "report", "crackdown", "police investigation", "journalist", etc.) or describes third-party actions without promoting sales, classify it as `False`."
+        description="""Return True if the given HTML content clearly promotes drug sales. If it does not, return False.
+        If it is just news articles, police reports, or discussions that merely **report** on drug-related incidents without advertising or facilitating drug sales or the content appears to be a news report (e.g., contains terms like "arrested", "report", "crackdown", "police investigation", "journalist", etc.) or describes third-party actions without promoting sales, classify it as `False`."""
     )
     promotion_content: str = Field(
         description="If the given HTML promotes drug sales, return the promotional content as promotion_content. If not, return an empty string. Do not translate the promotional content; extract and return it exactly as it appears in the original input. (e.g. if the original input was Korean, return it in Korean.)"
