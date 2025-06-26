@@ -28,8 +28,8 @@ vectorstore/**
 !vectorstoreA/**/*.py
 
 # Telegram API session 파일 무시
-.session
-.session-journal
+*.session
+*.session-journal
 
 credentials/
 
