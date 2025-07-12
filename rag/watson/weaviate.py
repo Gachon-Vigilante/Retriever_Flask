@@ -1,9 +1,15 @@
 """Weaviate 벡터스토어 연결 및 컨텍스트 관리 유틸리티 모듈."""
+from dotenv import load_dotenv
+import os
 import weaviate
 from weaviate import WeaviateClient
 
 from .constants import weaviate_headers
 
+weaviate_http_host=os.getenv("WEAVIATE_HTTP_HOST"),
+weaviate_http_port=os.getenv("WEAVIATE_HTTP_PORT"),
+weaviate_grpc_host=os.getenv("WEAVIATE_GRPC_PORT"),
+weaviate_grpc_port=os.getenv("WEAVIATE_GRPC_PORT"),
 
 def connect_weaviate() -> WeaviateClient:
     """로컬 Weaviate 인스턴스에 연결합니다.
@@ -11,9 +17,14 @@ def connect_weaviate() -> WeaviateClient:
     Returns:
         WeaviateClient: 연결된 Weaviate 클라이언트
     """
-    return weaviate.connect_to_local(
-        port=8888,
+    return weaviate.connect_to_custom(
+        http_host=weaviate_http_host,
+        http_port=weaviate_http_port,
+        http_secure=False,
+        grpc_host=weaviate_http_port,
+        grpc_port=weaviate_http_port,
         headers=weaviate_headers,
+        grpc_secure=False,
     )
 
 
