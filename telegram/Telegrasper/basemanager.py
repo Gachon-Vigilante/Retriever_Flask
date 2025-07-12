@@ -98,8 +98,12 @@ class TelegramBaseManager:
             logger.critical(message)
             raise TypeError(message)
 
-        self.client = TelegramClient(ds.number, ds.apiID, ds.apiHash, loop=self.loop)
-        await self.client.start()
+        # 세션 파일 경로 설정 (Docker 환경에서도 작동하도록)
+        session_name = f"/app/telegram_session_{ds.number}"
+        self.client = TelegramClient(session_name, ds.apiID, ds.apiHash, loop=self.loop)
+        
+        # 비대화형 모드로 시작 (Docker 환경에서 필요)
+        await self.client.start(phone=lambda: ds.number)
 
         logger.info("Telegram Client started.")
 

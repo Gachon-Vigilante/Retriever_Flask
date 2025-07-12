@@ -14,12 +14,17 @@ telegram_manager = TelegramManager()
 
 def init_telegram_singleton():
     """ 백그라운드 스레드에서 실행되는 텔레그램 클라이언트 초기화 함수 """
-    the_telegram_manager = TelegramManager() # 여기서는 백그라운드 호출이기 때문에, Singleton 객체에서
-    singleton_ready.set()  # 이벤트 트리거: (백그라운드 스레드에서) 싱글톤의 준비가 완료되었음을 이벤트로 알림
     try:
+        the_telegram_manager = TelegramManager() # 여기서는 백그라운드 호출이기 때문에, Singleton 객체에서
+        singleton_ready.set()  # 이벤트 트리거: (백그라운드 스레드에서) 싱글톤의 준비가 완료되었음을 이벤트로 알림
         the_telegram_manager.loop.run_forever()  # 백그라운드에서 루프 계속 실행
+    except Exception as e:
+        logger.error(f"Telegram 클라이언트 초기화 실패: {e}")
+        # 초기화 실패해도 서버는 계속 실행
+        singleton_ready.set()
     finally:
-        the_telegram_manager.client.disconnect() # 루프가 종료될 때(run_forever이므로, 서버 종료 시) 연결 종료
+        if hasattr(the_telegram_manager, 'client') and the_telegram_manager.client:
+            the_telegram_manager.client.disconnect() # 루프가 종료될 때(run_forever이므로, 서버 종료 시) 연결 종료
 
 
 # 별도의 스레드에서 실행
