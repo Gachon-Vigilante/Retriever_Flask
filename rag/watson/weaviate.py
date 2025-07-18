@@ -5,11 +5,12 @@ import weaviate
 from weaviate import WeaviateClient
 
 from .constants import weaviate_headers
+load_dotenv()
 
-weaviate_http_host=os.getenv("WEAVIATE_HTTP_HOST"),
-weaviate_http_port=os.getenv("WEAVIATE_HTTP_PORT"),
-weaviate_grpc_host=os.getenv("WEAVIATE_GRPC_PORT"),
-weaviate_grpc_port=os.getenv("WEAVIATE_GRPC_PORT"),
+weaviate_http_host=os.getenv("WEAVIATE_HTTP_HOST")
+weaviate_http_port=int(os.getenv("WEAVIATE_HTTP_PORT"))
+weaviate_grpc_host=os.getenv("WEAVIATE_GRPC_PORT")
+weaviate_grpc_port=int(os.getenv("WEAVIATE_GRPC_PORT"))
 
 def connect_weaviate() -> WeaviateClient:
     """로컬 Weaviate 인스턴스에 연결합니다.
@@ -21,8 +22,8 @@ def connect_weaviate() -> WeaviateClient:
         http_host=weaviate_http_host,
         http_port=weaviate_http_port,
         http_secure=False,
-        grpc_host=weaviate_http_port,
-        grpc_port=weaviate_http_port,
+        grpc_host=weaviate_grpc_host,
+        grpc_port=weaviate_grpc_port,
         headers=weaviate_headers,
         grpc_secure=False,
     )
