@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify
 
 import os
 import sys
@@ -34,6 +34,10 @@ from rag import watson_bp
 app.register_blueprint(watson_bp)
 from clustering import cluster_bp
 app.register_blueprint(cluster_bp)
+
+@app.route("/healthcheck", methods=["GET"])
+def healthcheck():
+    return jsonify({"status": "running"}), 200
 
 # 등록된 모든 라우트 출력
 with app.app_context():
