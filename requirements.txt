@@ -141,6 +141,8 @@ h11==0.16.0
     # via
     #   httpcore
     #   wsproto
+hdbscan==0.8.40
+    # via -r requirements.in
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1
@@ -155,6 +157,7 @@ httpx-sse==0.4.0
     # via langchain-community
 huggingface-hub==0.30.2
     # via
+    #   sentence-transformers
     #   tokenizers
     #   transformers
 idna==3.10
@@ -182,6 +185,7 @@ jiter==0.9.0
     #   openai
 joblib==1.5.0
     # via
+    #   hdbscan
     #   nltk
     #   pynndescent
     #   scikit-learn
@@ -281,6 +285,7 @@ numba==0.61.2
 numpy==1.26.4
     # via
     #   -r requirements.in
+    #   hdbscan
     #   kiwipiepy
     #   langchain-community
     #   langchain-weaviate
@@ -326,7 +331,9 @@ parso==0.8.4
 pdf2image==1.17.0
     # via langchain-teddynote
 pillow==11.2.1
-    # via pdf2image
+    # via
+    #   pdf2image
+    #   sentence-transformers
 pinecone-client[grpc]==6.0.0
     # via langchain-teddynote
 pinecone-plugin-interface==0.0.7
@@ -448,14 +455,20 @@ safetensors==0.5.3
 scikit-learn==1.6.1
     # via
     #   -r requirements.in
+    #   hdbscan
     #   pynndescent
+    #   sentence-transformers
     #   umap-learn
 scipy==1.15.2
     # via
+    #   hdbscan
     #   pynndescent
     #   scikit-learn
+    #   sentence-transformers
     #   umap-learn
 selenium==4.32.0
+    # via -r requirements.in
+sentence-transformers==5.0.0
     # via -r requirements.in
 sentencepiece==0.2.0
     # via -r requirements.in
@@ -500,13 +513,16 @@ tiktoken==0.9.0
 tokenizers==0.21.1
     # via transformers
 torch==2.7.0
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   sentence-transformers
 tqdm==4.67.1
     # via
     #   huggingface-hub
     #   kiwipiepy
     #   nltk
     #   openai
+    #   sentence-transformers
     #   transformers
     #   umap-learn
 traitlets==5.14.3
@@ -514,7 +530,9 @@ traitlets==5.14.3
     #   ipython
     #   matplotlib-inline
 transformers==4.51.3
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   sentence-transformers
 trio==0.30.0
     # via
     #   selenium
@@ -535,6 +553,7 @@ typing-extensions==4.13.2
     #   pydantic
     #   pydantic-core
     #   selenium
+    #   sentence-transformers
     #   sqlalchemy
     #   torch
     #   typing-inspect

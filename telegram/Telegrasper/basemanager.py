@@ -2,10 +2,15 @@
 import asyncio
 import threading
 
+import os
+from dotenv import load_dotenv
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 
 from . import details as ds
 from server.logger import logger
+
+load_dotenv()
 
 # details 모듈에서 가져오기
 api_id = ds.apiID
@@ -98,7 +103,7 @@ class TelegramBaseManager:
             logger.critical(message)
             raise TypeError(message)
 
-        self.client = TelegramClient(ds.number, ds.apiID, ds.apiHash, loop=self.loop)
+        self.client = TelegramClient(StringSession(os.getenv("TELEGRAM_SESSION_STRING")), ds.apiID, ds.apiHash, loop=self.loop)
         await self.client.start()
 
         logger.info("Telegram Client started.")
