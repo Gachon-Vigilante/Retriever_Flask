@@ -9,7 +9,7 @@ load_dotenv()
 
 weaviate_http_host=os.getenv("WEAVIATE_HTTP_HOST")
 weaviate_http_port=int(os.getenv("WEAVIATE_HTTP_PORT"))
-weaviate_grpc_host=os.getenv("WEAVIATE_GRPC_PORT")
+weaviate_grpc_host=os.getenv("WEAVIATE_GRPC_HOST")
 weaviate_grpc_port=int(os.getenv("WEAVIATE_GRPC_PORT"))
 
 def connect_weaviate() -> WeaviateClient:
