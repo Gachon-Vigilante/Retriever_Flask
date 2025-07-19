@@ -21,4 +21,4 @@ jobs:
           username: ${{ secrets.USERNAME }}
           password: ${{ secrets.PASSWORD }}
           script: |            
-            sudo ~/deploy.sh
+            sudo ~/deploy-flask.sh
