@@ -229,6 +229,25 @@ def cluster_with_custom_metric(
     unique_labels = set(labels)
     num_clusters = len(unique_labels) - (1 if -1 in unique_labels else 0)
 
+    for i in range(len(links)):
+        for j in range(i + 1, len(links)):
+            dist = float(distance_matrix[i][j])
+            if np.isnan(dist) or dist < 0.7:  # 거리 계산 실패한 경우는 건너뜀
+                continue
+            run_cypher("MATCH ()-[r:SIMILAR]-() DELETE r")
+            run_cypher(
+                """
+                MATCH (a:Post {link: $source}), (b:Post {link: $target})
+                MERGE (a)-[r:SIMILAR]-(b)
+                SET r.distance = $distance
+                """,
+                parameters={
+                    "source": links[i],
+                    "target": links[j],
+                    "distance": dist
+                }
+            )
+
     # 결과 업데이트 및 저장
     bulk_ops = []
     for idx, doc_id in enumerate(ids):
