@@ -66,6 +66,7 @@ python-louvain
 umap-learn
 sentence-transformers
 hdbscan
+matplotlib
 
 # Tokenizing에 필요한 패키지
 sentencepiece
