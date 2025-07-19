@@ -1,0 +1,24 @@
+name: Retriever Flask Backend CD pipeline
+
+on:
+  workflow_run:
+    workflows: [ "Retriever Flask Backend CI pipeline" ]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+    environment: production
+    permissions:
+      contents: read
+
+    steps:
+      - name: Docker 이미지 배포
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          script: |            
+            sudo ~/deploy.sh
